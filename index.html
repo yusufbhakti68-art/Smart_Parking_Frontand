@@ -1,0 +1,2183 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartParking Island — Sistem Parkir Cerdas 2 Lantai</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & JetBrains Mono -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    },
+                    colors: {
+                        island: {
+                            bg: '#141619',
+                            card: '#1E2126',
+                            border: '#2E323B',
+                            amber: '#F59E0B',
+                            coral: '#E85D4A',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .lcd-amber {
+            background-color: #16140C;
+            box-shadow: inset 0 2px 10px rgba(0, 0, 0, 0.85), 0 0 12px rgba(245, 158, 11, 0.12);
+            text-shadow: 0 0 6px rgba(245, 158, 11, 0.55);
+        }
+
+        @keyframes marquee {
+            0% { transform: translateX(100%); }
+            100% { transform: translateX(-100%); }
+        }
+        .animate-marquee {
+            display: inline-block;
+            white-space: nowrap;
+            animation: marquee 24s linear infinite;
+        }
+
+        @keyframes fireworksBurst {
+            0% {
+                opacity: 0;
+                transform: translate(-50%, 80px) scale(0.1) rotate(0deg);
+            }
+            50% { opacity: 1; }
+            75% {
+                transform: translate(var(--tw-translateX), var(--tw-translateY)) scale(1.1) rotate(var(--tw-rotate));
+            }
+            100% {
+                opacity: 1;
+                transform: translate(var(--tw-translateX), var(--tw-translateY)) scale(1) rotate(var(--tw-rotate));
+            }
+        }
+
+        .fireworks-card {
+            animation: fireworksBurst 0.7s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+    </style>
+</head>
+<body class="bg-[#141619] text-neutral-100 font-sans min-h-screen flex flex-col selection:bg-[#F59E0B]/30 selection:text-[#F59E0B]">
+
+    <!-- Banner Teks Berjalan (Marquee) -->
+    <div id="parking-marquee-banner" class="w-full bg-[#1E2126] border-b border-[#2E323B] overflow-hidden py-2 px-4 flex items-center shadow-md">
+        <div class="max-w-6xl w-full mx-auto overflow-hidden relative flex items-center">
+            <span id="marquee-text-content" class="animate-marquee font-mono text-xs font-bold text-[#F59E0B] tracking-wide">
+                ⚠️ PERHATIAN: Cek & amankan barang bawaan Anda! Barang hilang/ketinggalan bukan tanggung jawab petugas parkir ✦ ⏰ Jam Operasional Parkir: Buka Jam 06.00 WIB - Tutup Jam 22.00 WIB
+            </span>
+        </div>
+    </div>
+
+    <!-- Notifikasi Toast -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+    <!-- MODAL RESERVASI BOOKING SLOT BERBAYAR & BILLING -->
+    <div id="booking-modal" class="hidden fixed inset-0 z-50 bg-[#141619]/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-[#2E323B] pb-3">
+                <div>
+                    <h3 class="text-base font-bold text-white">Reservasi Booking Slot Parkir</h3>
+                    <p class="text-xs text-neutral-400">Pilih slot & durasi waktu booking (Billing per 15/30 menit)</p>
+                </div>
+                <button onclick="closeBookingModal()" class="p-1.5 rounded-lg bg-[#141619] border border-[#2E323B] text-neutral-400 hover:text-white transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-semibold text-neutral-300 mb-1.5">Pilih Slot Tersedia</label>
+                    <select id="booking-slot-select" class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs font-mono focus:outline-none focus:border-[#F59E0B]">
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-semibold text-neutral-300 mb-1.5">Durasi Booking (Billing Bertahap)</label>
+                    <div class="grid grid-cols-2 gap-2" id="booking-duration-options">
+                        <button type="button" onclick="selectBookingDuration(15)" data-min="15" class="dur-btn p-2.5 rounded-xl bg-[#F59E0B] text-[#141619] font-bold text-xs text-left transition border border-[#F59E0B]">
+                            <span class="block">15 Menit</span>
+                            <span class="text-[10px] opacity-85 font-mono" id="price-label-15">Rp 1.000</span>
+                        </button>
+                        <button type="button" onclick="selectBookingDuration(30)" data-min="30" class="dur-btn p-2.5 rounded-xl bg-[#141619] text-neutral-300 font-bold text-xs text-left transition border border-[#2E323B] hover:border-[#F59E0B]">
+                            <span class="block">30 Menit</span>
+                            <span class="text-[10px] text-neutral-400 font-mono" id="price-label-30">Rp 2.000</span>
+                        </button>
+                        <button type="button" onclick="selectBookingDuration(45)" data-min="45" class="dur-btn p-2.5 rounded-xl bg-[#141619] text-neutral-300 font-bold text-xs text-left transition border border-[#2E323B] hover:border-[#F59E0B]">
+                            <span class="block">45 Menit</span>
+                            <span class="text-[10px] text-neutral-400 font-mono" id="price-label-45">Rp 3.000</span>
+                        </button>
+                        <button type="button" onclick="selectBookingDuration(60)" data-min="60" class="dur-btn p-2.5 rounded-xl bg-[#141619] text-neutral-300 font-bold text-xs text-left transition border border-[#2E323B] hover:border-[#F59E0B]">
+                            <span class="block">60 Menit (1 Jam)</span>
+                            <span class="text-[10px] text-neutral-400 font-mono" id="price-label-60">Rp 4.000</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rincian Billing Booking -->
+                <div class="bg-[#141619] border border-[#2E323B] rounded-xl p-3.5 space-y-1.5 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-neutral-400">Tarif Dasar Billing</span>
+                        <span id="booking-rate-info" class="font-mono text-neutral-300">Rp 1.000 / 15 menit</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-neutral-400">Durasi Dipilih</span>
+                        <span id="booking-selected-duration-text" class="font-bold text-white">15 Menit</span>
+                    </div>
+                    <div class="flex justify-between pt-1.5 border-t border-[#2E323B]">
+                        <span class="text-neutral-300 font-bold">Total Pembayaran Booking</span>
+                        <span id="booking-total-price" class="text-sm font-extrabold text-[#F59E0B]">Rp 1.000</span>
+                    </div>
+                </div>
+
+                <!-- QRIS Mini Booking -->
+                <div class="bg-white rounded-xl p-2.5 flex items-center gap-3">
+                    <div id="booking-qr-mini" class="shrink-0"></div>
+                    <div class="text-[#141619]">
+                        <span class="block text-[10px] font-black uppercase tracking-wider text-[#EF4444]">QRIS Booking Instan</span>
+                        <p class="text-[11px] font-semibold leading-snug mt-0.5">Scan QR atau klik tombol konfirmasi di bawah untuk mengunci slot.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-2 pt-1">
+                <button onclick="confirmBookingPayment()" class="w-full py-3 px-4 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-extrabold text-xs transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                    Bayar Billing & Kunci Slot Sekarang
+                </button>
+                <button onclick="closeBookingModal()" class="w-full py-2 px-4 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-300 font-semibold text-xs transition">
+                    Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL FULLSCREEN: SEMBURAN KEMBANG API KARTU SARAN -->
+    <div id="suggestion-burst-modal" class="hidden fixed inset-0 z-50 bg-[#141619]/95 backdrop-blur-md flex flex-col items-center justify-center p-4 overflow-hidden">
+        <div class="absolute top-5 right-5 z-50 flex items-center gap-3">
+            <button onclick="closeSuggestionBurst()" class="px-4 py-2.5 rounded-xl bg-[#EF4444] hover:bg-red-600 text-white font-extrabold text-xs shadow-xl transition active:scale-95 flex items-center gap-2">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                Tutup Semburan
+            </button>
+        </div>
+
+        <div class="text-center mb-4 z-10 select-none">
+            <span class="px-3.5 py-1 rounded-full bg-[#EF4444]/20 border border-[#EF4444]/40 text-[#EF4444] text-xs font-black tracking-widest uppercase">
+                💥 Semburan Kembang Api Curhatan
+            </span>
+            <h2 class="text-2xl sm:text-3xl font-black text-white mt-2">Wadah Uneg-Uneg Mu Terhambur!</h2>
+            <p class="text-xs text-neutral-400 mt-1 max-w-md mx-auto">Klik pada kartu mana saja untuk membaca detail masukan.</p>
+        </div>
+
+        <div id="fireworks-canvas" class="relative w-full max-w-5xl h-[520px] flex items-center justify-center overflow-hidden">
+            <div class="w-28 h-28 rounded-2xl bg-gradient-to-br from-[#EF4444] to-[#B91C1C] border-2 border-red-400 shadow-[0_0_50px_rgba(239,68,68,0.5)] flex items-center justify-center z-20 animate-pulse">
+                <span class="text-xs font-black text-white text-center leading-tight tracking-wider">BOX<br>CURHAT</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL BACA DETAIL KRITIK & SARAN -->
+    <div id="read-feedback-modal" class="hidden fixed inset-0 z-50 bg-[#141619]/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-md bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-[#2E323B] pb-3">
+                <div class="flex items-center gap-2">
+                    <span id="detail-feedback-stars" class="text-[#F59E0B] text-sm font-bold">★★★★★</span>
+                    <span id="detail-feedback-user" class="text-xs font-bold text-white">siswa@smk.id</span>
+                </div>
+                <button onclick="closeDetailFeedbackModal()" class="text-neutral-400 hover:text-white p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div class="p-4 rounded-xl bg-[#141619] border border-[#2E323B]">
+                <p id="detail-feedback-message" class="text-xs text-neutral-200 leading-relaxed whitespace-pre-wrap">Isi masukan...</p>
+            </div>
+            <div class="flex justify-between items-center text-[10px] text-neutral-500 pt-1">
+                <span id="detail-feedback-time">-</span>
+                <button id="btn-delete-detail-feedback" class="px-3 py-1.5 rounded-lg bg-[#EF4444]/15 hover:bg-[#EF4444] text-[#EF4444] hover:text-white font-bold transition">
+                    Hapus Saran Ini
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PEMBAYARAN QRIS & VOUCHER PROMO -->
+    <div id="payment-modal" class="hidden fixed inset-0 z-50 bg-[#141619]/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 shadow-2xl space-y-4">
+            <div class="flex items-center justify-between border-b border-[#2E323B] pb-3">
+                <div>
+                    <h3 class="text-base font-bold text-white">Pembayaran Parkir QRIS</h3>
+                    <p class="text-xs text-neutral-400">Scan QR Code atau gunakan kode promo</p>
+                </div>
+                <button onclick="closePaymentPage()" class="p-1.5 rounded-lg bg-[#141619] border border-[#2E323B] text-neutral-400 hover:text-white transition">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+
+            <div class="bg-[#141619] border border-[#2E323B] rounded-xl p-3.5 space-y-1.5 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-neutral-400">ID Transaksi</span>
+                    <span id="pay-tx-id" class="font-mono font-bold text-white">-</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-neutral-400">Slot / Kartu</span>
+                    <span id="pay-slot-card" class="font-semibold text-white">-</span>
+                </div>
+                <div class="flex justify-between pt-1 border-t border-[#2E323B]">
+                    <span class="text-neutral-400 font-semibold">Total Tagihan</span>
+                    <span id="pay-total-tarif" class="text-sm font-extrabold text-[#F59E0B]">Rp 0</span>
+                </div>
+            </div>
+
+            <div class="space-y-1.5">
+                <label class="block text-[11px] font-bold text-neutral-300">Punya Kode Promo / Voucher?</label>
+                <div class="flex gap-2">
+                    <input type="text" id="promo-code-input" placeholder="Cth: SMKBISA" class="flex-1 px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs font-mono uppercase focus:outline-none focus:border-[#F59E0B]">
+                    <button type="button" onclick="applyPromoVoucher()" class="px-4 py-2 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-xs transition">Pakai</button>
+                </div>
+                <p id="promo-status-text" class="text-[10px] text-[#22C55E] hidden">Voucher berhasil diterapkan! Diskon aktif.</p>
+            </div>
+
+            <div class="bg-white rounded-2xl p-3 flex flex-col items-center justify-center">
+                <div id="pay-qr-container"></div>
+                <span class="text-[10px] font-mono font-bold text-[#141619] mt-1 tracking-wider">QRIS SMARTPARKING ISLAND</span>
+            </div>
+
+            <div class="space-y-2">
+                <button onclick="confirmQrPayment()" class="w-full py-3 px-4 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-extrabold text-sm transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Scan & Bayar Sekarang
+                </button>
+                <button onclick="closePaymentPage()" class="w-full py-2.5 px-4 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-300 font-semibold text-xs transition">
+                    Kembali
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PENILAIAN BINTANG (LOGOUT) -->
+    <div id="logout-feedback-modal" class="hidden fixed inset-0 z-50 bg-[#141619]/90 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-sm bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 shadow-2xl space-y-5">
+            <div class="text-center space-y-1">
+                <h3 class="text-base font-bold text-white">Beri Nilai & Masukan</h3>
+                <p class="text-xs text-neutral-400">Bantu kami mengembangkan SmartParking Island sebelum Anda keluar.</p>
+            </div>
+
+            <div class="flex items-center justify-center gap-2 py-2" id="logout-star-container">
+                <button type="button" onclick="setLogoutRating(1)" class="star-btn p-1 text-[#F59E0B] transition"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+                <button type="button" onclick="setLogoutRating(2)" class="star-btn p-1 text-[#F59E0B] transition"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+                <button type="button" onclick="setLogoutRating(3)" class="star-btn p-1 text-[#F59E0B] transition"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+                <button type="button" onclick="setLogoutRating(4)" class="star-btn p-1 text-[#F59E0B] transition"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+                <button type="button" onclick="setLogoutRating(5)" class="star-btn p-1 text-[#F59E0B] transition"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24"><path d="M12 17.27L18.18 21l-1.64-7.03L22 9.24l-7.19-.61L12 2 9.19 8.63 2 9.24l5.46 4.73L5.82 21z"/></svg></button>
+            </div>
+
+            <form onsubmit="submitLogoutFeedback(event)" class="space-y-3">
+                <textarea id="logout-feedback-message" rows="3" placeholder="Tuliskan curhatan atau uneg-uneg Anda..."
+                    class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs placeholder-neutral-500 focus:outline-none focus:border-[#F59E0B]"></textarea>
+                <button type="submit" class="w-full py-3 px-4 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-extrabold text-xs transition active:scale-95">
+                    Kirim & Keluar
+                </button>
+                <button type="button" onclick="confirmLogout()" class="w-full py-2.5 px-4 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-400 hover:text-white font-semibold text-xs transition">
+                    Lewati & Keluar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- WIDGET CHAT CS PENGGUNA -->
+    <div id="cs-widget" class="hidden fixed bottom-5 right-5 z-40">
+        <div id="cs-chat-box" class="hidden mb-3 w-80 sm:w-96 bg-[#1E2126] border border-[#2E323B] rounded-2xl shadow-2xl overflow-hidden flex flex-col">
+            <div class="bg-[#141619] px-4 py-3 border-b border-[#2E323B] flex items-center justify-between">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full bg-[#22C55E]/20 border border-[#22C55E]/40 text-[#22C55E] flex items-center justify-center font-bold text-xs">CS</div>
+                    <div>
+                        <h4 class="text-xs font-bold text-white">Smart Parking CS</h4>
+                        <p class="text-[10px] text-[#22C55E] flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 rounded-full bg-[#22C55E] animate-pulse"></span> Pengelola Online
+                        </p>
+                    </div>
+                </div>
+                <button onclick="toggleCsChat()" class="text-neutral-400 hover:text-white p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <div id="cs-chat-messages" class="p-3.5 h-64 overflow-y-auto space-y-2.5 bg-[#0B141A]/70"></div>
+            <form onsubmit="sendCsMessage(event)" class="p-2.5 bg-[#141619] border-t border-[#2E323B] flex gap-2">
+                <input type="text" id="cs-chat-input" required placeholder="Tulis keluhan Anda..."
+                    class="flex-1 px-3.5 py-2 rounded-xl bg-[#1E2126] border border-[#2E323B] text-white text-xs placeholder-neutral-500 focus:outline-none focus:border-[#22C55E]">
+                <button type="submit" class="px-3.5 py-2 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-extrabold text-xs transition">Kirim</button>
+            </form>
+        </div>
+
+        <button onclick="toggleCsChat()" aria-label="Pusat Bantuan CS"
+            class="ml-auto w-14 h-14 rounded-full bg-[#22C55E] hover:bg-green-500 text-[#141619] shadow-2xl flex items-center justify-center transition active:scale-95 border-2 border-[#141619]">
+            <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+        </button>
+    </div>
+
+    <!-- 1. HALAMAN LOGIN -->
+    <main id="view-login" class="flex-1 flex items-center justify-center p-4 sm:p-6">
+        <div class="w-full max-w-md bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 sm:p-8 shadow-2xl">
+            <div class="flex items-center gap-3 mb-6">
+                <div class="w-11 h-11 rounded-2xl bg-[#F59E0B] flex items-center justify-center text-[#141619] shrink-0">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h8m-8 4h6m-6 4h4M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight text-white">SmartParking <span class="text-[#F59E0B]">Island</span></h1>
+                    <p class="text-xs text-neutral-400 mt-0.5">Portal Akses Parkir Cerdas 2 Lantai</p>
+                </div>
+            </div>
+
+            <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                <div>
+                    <label for="login-email" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">Username / Email</label>
+                    <input type="text" id="login-email" required placeholder="Masukkan email akun"
+                        class="w-full px-4 py-3 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-sm placeholder-neutral-500 focus:outline-none focus:border-[#F59E0B] transition">
+                </div>
+                <div>
+                    <label for="login-password" class="block text-xs font-semibold text-neutral-300 uppercase tracking-wider mb-1.5">Kata Sandi</label>
+                    <input type="password" id="login-password" required placeholder="Masukkan kata sandi"
+                        class="w-full px-4 py-3 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-sm placeholder-neutral-500 focus:outline-none focus:border-[#F59E0B] transition">
+                </div>
+
+                <div id="login-error" class="hidden p-3 rounded-xl bg-[#EF4444]/10 border border-[#EF4444]/40 text-[#EF4444] text-xs font-medium">
+                    Email atau kata sandi tidak sesuai. Silakan periksa kembali.
+                </div>
+
+                <button type="submit" class="w-full py-3.5 px-4 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-sm transition active:scale-[0.98] flex items-center justify-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"/></svg>
+                    Masuk ke Sistem
+                </button>
+            </form>
+
+            <div class="mt-6 pt-5 border-t border-[#2E323B]">
+                <p class="text-xs text-neutral-400 text-center mb-3">Akses Demo Cepat</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <button type="button" onclick="quickLogin('driver')" class="p-3 rounded-xl bg-[#141619] border border-[#2E323B] hover:border-[#F59E0B] text-left transition group">
+                        <span class="block text-xs font-bold text-white group-hover:text-[#F59E0B]">Pengguna Biasa</span>
+                        <span class="block text-[11px] text-neutral-400 mt-0.5 font-mono">siswa@smk.id</span>
+                    </button>
+                    <button type="button" onclick="quickLogin('admin')" class="p-3 rounded-xl bg-[#141619] border border-[#2E323B] hover:border-[#EF4444] text-left transition group">
+                        <span class="block text-xs font-bold text-white group-hover:text-[#EF4444]">Pengelola</span>
+                        <span class="block text-[11px] text-neutral-400 mt-0.5 font-mono">admin@smartpark.id</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- 2. APLIKASI UTAMA (SHELL) -->
+    <div id="app-shell" class="hidden flex-1 flex flex-col">
+        <header class="sticky top-0 z-40 px-4 sm:px-6 pt-4 pb-2 bg-[#141619]/90 backdrop-blur-md">
+            <div class="max-w-6xl mx-auto bg-[#1E2126] border border-[#2E323B] rounded-2xl px-4 sm:px-6 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 shadow-lg">
+                <div class="flex items-center justify-between w-full sm:w-auto">
+                    <div class="flex items-center gap-3">
+                        <button id="btn-admin-hamburger" onclick="toggleAdminMenu()" class="hidden p-2 rounded-xl bg-[#141619] border border-[#2E323B] hover:border-[#F59E0B] text-neutral-200">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                        </button>
+                        <div class="w-9 h-9 rounded-xl bg-[#F59E0B] flex items-center justify-center text-[#141619]">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 7h8m-8 4h6m-6 4h4M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z"/></svg>
+                        </div>
+                        <div>
+                            <h1 class="text-base font-bold text-white leading-none">SmartParking <span class="text-[#F59E0B]">Island</span></h1>
+                            <p id="header-user-role" class="text-xs text-neutral-400 mt-1">Pengguna Biasa</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-[#2E323B]">
+                    <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#22C55E]/10 border border-[#22C55E]/30 text-[#22C55E] text-xs font-medium">
+                        <span class="w-2 h-2 rounded-full bg-[#22C55E] animate-pulse"></span>
+                        ESP32 Terhubung
+                    </div>
+                    <span id="header-user-email" class="text-xs font-mono text-neutral-300 bg-[#141619] px-3 py-1.5 rounded-xl border border-[#2E323B]">siswa@smk.id</span>
+                    <button onclick="handleLogout()" class="px-3.5 py-1.5 rounded-xl bg-[#E85D4A]/15 hover:bg-[#E85D4A] text-[#E85D4A] hover:text-white border border-[#E85D4A]/40 text-xs font-bold transition flex items-center gap-1.5">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                        Keluar
+                    </button>
+                </div>
+            </div>
+
+            <!-- Drawer Navigation Admin LENGKAP -->
+            <div id="admin-nav-drawer" class="hidden max-w-6xl mx-auto mt-2 bg-[#1E2126] border border-[#2E323B] rounded-2xl p-3 shadow-2xl">
+                <div class="flex items-center justify-between px-2 pb-2 mb-2 border-b border-[#2E323B]">
+                    <span class="text-xs font-bold uppercase tracking-wider text-neutral-400">Menu Pengelola</span>
+                    <button onclick="toggleAdminMenu()" class="text-xs text-neutral-400 hover:text-white">Tutup</button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                    <button onclick="switchAdminTab('ops')" id="tab-btn-ops" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#F59E0B] text-[#141619] font-bold text-xs transition flex items-center gap-2.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"/></svg>
+                        Operasional, Gerbang & Peringatan
+                    </button>
+                    <button onclick="switchAdminTab('devices')" id="tab-btn-devices" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#141619] text-neutral-300 hover:text-white border border-[#2E323B] font-semibold text-xs transition flex items-center gap-2.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"/></svg>
+                        Perangkat & LCD
+                    </button>
+                    <button onclick="switchAdminTab('rfid')" id="tab-btn-rfid" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#141619] text-neutral-300 hover:text-white border border-[#2E323B] font-semibold text-xs transition flex items-center gap-2.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/></svg>
+                        Kartu RFID, Tarif & Billing
+                    </button>
+                    <button onclick="switchAdminTab('reports')" id="tab-btn-reports" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#141619] text-neutral-300 hover:text-white border border-[#2E323B] font-semibold text-xs transition flex items-center gap-2.5">
+                        <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Laporan Transaksi
+                    </button>
+                    <button onclick="switchAdminTab('cs')" id="tab-btn-cs" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#141619] text-neutral-300 hover:text-white border border-[#2E323B] font-semibold text-xs transition flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"/></svg>
+                            <span>Smart Parking CS</span>
+                        </div>
+                        <span id="cs-unread-count-badge" class="px-2 py-0.5 rounded-full bg-[#22C55E] text-[#141619] font-extrabold text-[10px]">1</span>
+                    </button>
+                    <button onclick="switchAdminTab('feedback')" id="tab-btn-feedback" class="admin-tab-btn text-left py-3 px-4 rounded-xl bg-[#141619] text-neutral-300 hover:text-white border border-[#2E323B] font-semibold text-xs transition flex items-center justify-between">
+                        <div class="flex items-center gap-2.5">
+                            <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                            <span>Wadah Uneg-Uneg Mu</span>
+                        </div>
+                        <span id="admin-feedback-badge" class="px-2 py-0.5 rounded-full bg-[#F59E0B] text-[#141619] font-extrabold text-[10px]">3</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Shell -->
+        <main class="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-5 space-y-6">
+
+            <!-- A. DASHBOARD PENGGUNA BIASA (DRIVER) -->
+            <section id="view-driver" class="hidden space-y-6">
+                <div id="driver-full-alert" class="hidden p-4 rounded-2xl bg-[#E85D4A]/15 border border-[#E85D4A]/40 flex items-center justify-between text-[#E85D4A]">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                        <div>
+                            <h4 id="driver-full-alert-title" class="text-xs font-bold uppercase tracking-wider">Perhatian: Seluruh Slot Terisi Penuh</h4>
+                            <p id="driver-full-alert-desc" class="text-xs opacity-90 mt-0.5">Silakan tunggu hingga ada kendaraan lain yang keluar.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Summary Ketersediaan & Tombol Booking / Tap Masuk -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <div class="md:col-span-2 bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div>
+                            <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#F59E0B]/15 text-[#F59E0B] text-xs font-semibold mb-2">Pemantauan Real-Time</span>
+                            <h2 class="text-2xl font-extrabold text-white">Ketersediaan Slot Parkir</h2>
+                            <p class="text-neutral-400 text-sm mt-1">Tarif parkir: <strong class="text-[#F59E0B]" id="driver-tarif-info">Rp 2.000 / jam</strong> • Billing Booking: <strong class="text-[#22C55E]" id="driver-booking-rate-info">Rp 1.000 / 15 mnt</strong></p>
+                            <p class="text-xs text-[#22C55E] font-semibold mt-2">Rekomendasi Terdekat: <span id="driver-nearest-slot" class="font-mono text-white">Lantai 1 - Slot A1</span></p>
+                        </div>
+                        <div class="bg-[#141619] border border-[#2E323B] rounded-2xl px-6 py-4 text-center w-full sm:w-auto">
+                            <p class="text-xs text-neutral-400 uppercase tracking-wider font-semibold">Slot Kosong</p>
+                            <div class="text-4xl font-black text-[#22C55E] mt-1">
+                                <span id="driver-available-count">4</span><span class="text-xl text-neutral-500 font-bold"> / 4</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 flex flex-col justify-center gap-2.5">
+                        <button onclick="simulateEntry()" class="w-full py-3 px-4 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-xs shadow-lg transition active:scale-[0.98] flex items-center justify-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm14 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"/></svg>
+                            Tap RFID / Scan QR Masuk
+                        </button>
+                        <button onclick="openBookingModal()" class="w-full py-2.5 px-4 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-[#F59E0B] font-bold text-xs transition active:scale-[0.98] flex items-center justify-center gap-2">
+                            🅿️ Reservasi Booking Slot (Berbayar)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Denah Visual Slot Parkir 2 Lantai -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-[#141619] border border-[#2E323B] text-[#F59E0B] flex items-center justify-center text-xs font-bold">L1</span>
+                                Lantai 1 (Dasar)
+                            </h3>
+                            <span class="text-xs text-neutral-400">2 Sensor Ultrasonik</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4" id="floor-1-slots"></div>
+                    </div>
+
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                <span class="w-7 h-7 rounded-lg bg-[#141619] border border-[#2E323B] text-[#F59E0B] flex items-center justify-center text-xs font-bold">L2</span>
+                                Lantai 2 (Atas)
+                            </h3>
+                            <span class="text-xs text-neutral-400">2 Sensor Ultrasonik</span>
+                        </div>
+                        <div class="grid grid-cols-2 gap-4" id="floor-2-slots"></div>
+                    </div>
+                </div>
+
+                <!-- Tiket Aktif & Pembayaran Keluar -->
+                <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6">
+                    <div class="mb-4">
+                        <h3 class="text-base font-bold text-white">Tiket Aktif & Pembayaran Keluar</h3>
+                        <p class="text-xs text-neutral-400 mt-0.5">Timer berjalan otomatis. Jika melewati batas waktu, sistem akan menampilkan denda.</p>
+                    </div>
+                    <div id="active-tickets-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"></div>
+                </div>
+
+                <!-- Riwayat Parkir & Billing Booking -->
+                <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6">
+                    <div class="mb-4">
+                        <h3 class="text-base font-bold text-white">Riwayat Parkir, Booking & Struk Digital</h3>
+                        <p class="text-xs text-neutral-400 mt-0.5">Catatan transaksi parkir dan pembayaran booking slot untuk transparansi tarif.</p>
+                    </div>
+                    <div id="driver-history-list" class="space-y-2.5"></div>
+                </div>
+            </section>
+
+            <!-- B. DASHBOARD PENGELOLA (ADMIN) -->
+            <section id="view-admin" class="hidden space-y-6">
+                <div class="flex items-center justify-between bg-[#1E2126] border border-[#2E323B] rounded-2xl px-5 py-3.5">
+                    <div>
+                        <span class="text-[11px] uppercase tracking-wider text-neutral-400 font-semibold">Halaman Pengelola</span>
+                        <h2 id="admin-active-title" class="text-base font-bold text-white">Operasional, Gerbang & Peringatan</h2>
+                    </div>
+                    <button onclick="toggleAdminMenu()" class="px-3.5 py-2 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-xs font-semibold text-[#F59E0B] transition">
+                        Ganti Menu
+                    </button>
+                </div>
+
+                <!-- TAB 1: OPERASIONAL, GERBANG & PERINGATAN DINAMIS -->
+                <div id="admin-tab-ops" class="admin-tab-panel space-y-6">
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5">
+                            <p class="text-xs text-neutral-400 font-medium uppercase tracking-wider">Kendaraan Parkir</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-3xl font-extrabold text-white" id="admin-parked-count">0</p>
+                                <span class="text-xs text-neutral-400" id="admin-available-text">4 slot tersedia</span>
+                            </div>
+                        </div>
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5">
+                            <p class="text-xs text-neutral-400 font-medium uppercase tracking-wider">Masuk (Hari Ini)</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-3xl font-extrabold text-[#22C55E]" id="admin-count-in">0</p>
+                                <span class="text-xs text-neutral-400">Kendaraan</span>
+                            </div>
+                        </div>
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5">
+                            <p class="text-xs text-neutral-400 font-medium uppercase tracking-wider">Keluar (Hari Ini)</p>
+                            <div class="flex items-baseline justify-between mt-2">
+                                <p class="text-3xl font-extrabold text-[#E85D4A]" id="admin-count-out">0</p>
+                                <span class="text-xs text-neutral-400">Kendaraan</span>
+                            </div>
+                        </div>
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5">
+                            <p class="text-xs text-neutral-400 font-medium uppercase tracking-wider">Pemasukan QRIS & Booking</p>
+                            <p class="text-2xl font-extrabold text-[#22C55E] mt-2" id="admin-revenue-qris">Rp 0</p>
+                        </div>
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5">
+                            <p class="text-xs text-neutral-400 font-medium uppercase tracking-wider">Total Pendapatan</p>
+                            <p class="text-2xl font-extrabold text-[#F59E0B] mt-2" id="admin-revenue">Rp 0</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Mode Darurat & Jam Operasional</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Kontrol status area parkir dan atur jadwal jam buka/tutup sistem.</p>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-neutral-400 uppercase mb-1">Jam Buka Parkir</label>
+                                    <input type="text" id="admin-jam-buka" value="06.00 WIB" onchange="updateOperationalHours()"
+                                        class="w-full px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs font-mono focus:outline-none focus:border-[#F59E0B]">
+                                </div>
+                                <div>
+                                    <label class="block text-[11px] font-semibold text-neutral-400 uppercase mb-1">Jam Tutup Parkir</label>
+                                    <input type="text" id="admin-jam-tutup" value="22.00 WIB" onchange="updateOperationalHours()"
+                                        class="w-full px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs font-mono focus:outline-none focus:border-[#F59E0B]">
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                <button onclick="emergencyOpenAllGates()" class="py-3 px-4 rounded-xl bg-[#EF4444]/15 hover:bg-[#EF4444] text-[#EF4444] hover:text-white border border-[#EF4444]/40 font-bold text-xs transition active:scale-95">
+                                    Buka Semua Gerbang (Darurat)
+                                </button>
+                                <button id="btn-toggle-parking-closed" onclick="toggleParkingClosed()" class="py-3 px-4 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-200 font-bold text-xs transition active:scale-95">
+                                    Tutup Area Parkir
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Kontrol Gerbang Manual & Tunai</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Gunakan kontrol ini jika terjadi gangguan saat tap RFID/QR atau untuk pembayaran tunai.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div class="bg-[#141619] border border-[#2E323B] rounded-xl p-4 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-white">Gerbang Masuk (Servo 1)</span>
+                                        <span id="status-servo-1" class="text-xs font-bold text-neutral-300">Tertutup</span>
+                                    </div>
+                                    <button onclick="manualGateEntry()" class="w-full py-2.5 px-3 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-xs transition active:scale-95">
+                                        Buka Manual & Catat Masuk
+                                    </button>
+                                </div>
+                                <div class="bg-[#141619] border border-[#2E323B] rounded-xl p-4 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="text-xs font-bold text-white">Gerbang Keluar (Servo 2)</span>
+                                        <span id="status-servo-2" class="text-xs font-bold text-neutral-300">Tertutup</span>
+                                    </div>
+                                    <button onclick="manualGateExitCash()" class="w-full py-2.5 px-3 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition active:scale-95">
+                                        Buka Manual & Pembayaran Tunai
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- PANEL PENGATURAN TEKS PERINGATAN & BANNER PENGELOLA -->
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-[#2E323B] pb-3">
+                            <div>
+                                <h3 class="text-base font-bold text-white flex items-center gap-2">
+                                    <span>📢</span> Pengaturan Teks Peringatan & Banner Pengumuman
+                                </h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Ubah pesan peringatan barang bawaan, pengumuman saat parkir tutup, dan peringatan saat parkir penuh.</p>
+                            </div>
+                            <button onclick="resetWarningTexts()" class="px-3 py-1.5 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-300 text-xs font-semibold transition self-start sm:self-auto">
+                                Reset Teks Default
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                            <!-- Input Peringatan Utama (Running Text) -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-[#F59E0B]">1. Teks Peringatan Utama (Parkir Buka)</label>
+                                <textarea id="admin-warn-open-input" rows="3" class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs focus:outline-none focus:border-[#F59E0B] leading-relaxed">⚠️ PERHATIAN: Cek & amankan barang bawaan Anda! Barang hilang/ketinggalan bukan tanggung jawab petugas parkir</textarea>
+                                <p class="text-[10px] text-neutral-500">Otomatis digabungkan dengan informasi jam buka & tutup di banner bergerak.</p>
+                            </div>
+
+                            <!-- Input Peringatan Tutup -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-[#EF4444]">2. Teks Banner Saat Parkir Ditutup</label>
+                                <textarea id="admin-warn-closed-input" rows="3" class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs focus:outline-none focus:border-[#EF4444] leading-relaxed">🚫 MAAF, PARKIR SEDANG DITUTUP. Harap memarkir kendaraan di luar area gerbang.</textarea>
+                                <p class="text-[10px] text-neutral-500">Muncul dengan warna merah saat pengelola mengaktifkan tombol "Tutup Area Parkir".</p>
+                            </div>
+
+                            <!-- Input Peringatan Slot Penuh -->
+                            <div class="space-y-1.5">
+                                <label class="block text-xs font-bold text-[#E85D4A]">3. Peringatan Banner Parkir Penuh (Driver)</label>
+                                <textarea id="admin-warn-full-input" rows="3" class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs focus:outline-none focus:border-[#E85D4A] leading-relaxed">Seluruh slot parkir sedang terisi penuh. Silakan tunggu hingga ada kendaraan lain yang keluar.</textarea>
+                                <p class="text-[10px] text-neutral-500">Tampil di dashboard pengguna biasa ketika 4 slot sedang penuh.</p>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end pt-2">
+                            <button onclick="saveWarningTexts()" class="px-5 py-2.5 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-extrabold text-xs shadow-lg transition active:scale-95 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                Simpan & Terapkan Semua Peringatan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: PERANGKAT & LCD -->
+                <div id="admin-tab-devices" class="admin-tab-panel hidden space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        <div class="lg:col-span-2 bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Status Perangkat Hardware</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Klik status perangkat untuk mensimulasikan error/gangguan jaringan hardware.</p>
+                            </div>
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3" id="admin-device-list"></div>
+                        </div>
+
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4 flex flex-col justify-between">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Tampilan LCD 16x2 (I2C)</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Simulasi tampilan layar LCD di pintu gerbang parkir.</p>
+                            </div>
+
+                            <div class="lcd-amber rounded-xl p-4 border border-[#F59E0B]/30 font-mono tracking-widest text-[#F59E0B] space-y-1 my-2">
+                                <div id="lcd-line-1" class="text-sm font-bold truncate">SMARTPARK ISLAND</div>
+                                <div id="lcd-line-2" class="text-xs font-semibold truncate">KOSONG: 4 SLOT</div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <input type="text" id="lcd-input-1" maxlength="16" placeholder="Baris 1 (Maks 16 char)"
+                                    class="w-full px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                <input type="text" id="lcd-input-2" maxlength="16" placeholder="Baris 2 (Maks 16 char)"
+                                    class="w-full px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                <div class="grid grid-cols-2 gap-2 pt-1">
+                                    <button onclick="sendCustomLCD()" class="py-2 px-3 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-xs transition">
+                                        Kirim Teks
+                                    </button>
+                                    <button onclick="resetCustomLCD()" class="py-2 px-3 rounded-xl bg-[#141619] hover:bg-[#2E323B] border border-[#2E323B] text-neutral-300 font-semibold text-xs transition">
+                                        Reset LCD
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 3: KARTU RFID & TARIF & BILLING BOOKING -->
+                <div id="admin-tab-rfid" class="admin-tab-panel hidden space-y-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Manajemen Tarif Parkir</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Tarif parkir standar per jam.</p>
+                            </div>
+                            <div class="flex flex-col gap-2.5">
+                                <input type="number" id="admin-tarif-input" min="0" step="500" value="2000"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                <button onclick="updateTarifPerJam()" class="w-full py-2.5 rounded-xl bg-[#F59E0B] hover:bg-amber-400 text-[#141619] font-bold text-xs transition active:scale-95">
+                                    Simpan Tarif Parkir
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Billing Reservasi Booking</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Tarif booking slot per 15 menit (30 mnt = 2x lipat).</p>
+                            </div>
+                            <div class="flex flex-col gap-2.5">
+                                <input type="number" id="admin-booking-rate-input" min="500" step="500" value="1000"
+                                    class="w-full px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                <button onclick="updateBookingRate()" class="w-full py-2.5 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition active:scale-95">
+                                    Simpan Tarif Booking / 15 Mnt
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 flex flex-col justify-between gap-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Denda Keterlambatan</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Batas detik simulasi & nominal denda.</p>
+                            </div>
+                            <div class="space-y-2">
+                                <div class="grid grid-cols-2 gap-2">
+                                    <input type="number" id="admin-denda-limit" min="5" step="5" value="30" placeholder="Batas (detik)"
+                                        class="px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                    <input type="number" id="admin-denda-amount" min="0" step="1000" value="5000" placeholder="Denda (Rp)"
+                                        class="px-3 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white font-mono text-xs focus:outline-none focus:border-[#F59E0B]">
+                                </div>
+                                <button onclick="updateDendaSettings()" class="w-full py-2.5 rounded-xl bg-[#E85D4A] hover:bg-red-500 text-white font-bold text-xs transition active:scale-95">
+                                    Simpan Denda
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Manajemen Kode Promo & Voucher -->
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4">
+                        <div>
+                            <h3 class="text-base font-bold text-white">Kelola Kode Promo / Voucher Parkir</h3>
+                            <p class="text-xs text-neutral-400 mt-0.5">Tambah atau hapus kode voucher diskon yang dapat digunakan pengguna saat pembayaran QRIS.</p>
+                        </div>
+                        <form onsubmit="addNewPromoCode(event)" class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                            <input type="text" id="new-promo-code" required placeholder="Kode Voucher (Cth: MERDEKA)"
+                                class="px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs uppercase font-mono focus:outline-none focus:border-[#F59E0B]">
+                            <input type="number" id="new-promo-discount" min="500" step="500" value="1000" required placeholder="Potongan (Rp)"
+                                class="px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs font-mono focus:outline-none focus:border-[#F59E0B]">
+                            <button type="submit" class="px-4 py-2.5 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition active:scale-95">
+                                + Tambah Voucher
+                            </button>
+                        </form>
+                        <div id="admin-voucher-list" class="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2"></div>
+                    </div>
+
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4">
+                        <div>
+                            <h3 class="text-base font-bold text-white">Registrasi & Kelola Kartu RFID</h3>
+                            <p class="text-xs text-neutral-400 mt-0.5">Tempelkan kartu ke RFID Reader terlebih dahulu agar sistem membaca ID kartu, lalu masukkan nama pemilik.</p>
+                        </div>
+                        <form onsubmit="registerRfidCard(event)" class="grid grid-cols-1 sm:grid-cols-4 gap-3">
+                            <button type="button" onclick="scanRfidForRegistration()" class="px-4 py-2.5 rounded-xl bg-[#F59E0B]/15 hover:bg-[#F59E0B] text-[#F59E0B] hover:text-[#141619] border border-[#F59E0B]/40 font-bold text-xs transition active:scale-95">
+                                Tap Kartu ke RFID Reader
+                            </button>
+                            <input type="text" id="rfid-input-id" required readonly placeholder="Menunggu tap RFID..."
+                                class="px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-[#F59E0B] font-mono text-xs focus:outline-none cursor-not-allowed">
+                            <input type="text" id="rfid-input-owner" required placeholder="Nama Pemilik (cth: Budi - XII RPL)"
+                                class="px-3.5 py-2.5 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs focus:outline-none focus:border-[#F59E0B]">
+                            <button type="submit" class="px-4 py-2.5 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition active:scale-95">
+                                + Daftarkan Kartu
+                            </button>
+                        </form>
+                        <div id="admin-rfid-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: LAPORAN TRANSAKSI -->
+                <div id="admin-tab-reports" class="admin-tab-panel hidden space-y-6">
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-5 sm:p-6 space-y-4">
+                        <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-[#2E323B] pb-4">
+                            <div>
+                                <h3 class="text-base font-bold text-white">Laporan Transaksi Parkir & Booking</h3>
+                                <p class="text-xs text-neutral-400 mt-0.5">Rekapitulasi seluruh riwayat parkir, booking, dan metode pembayaran.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button onclick="exportTransactionsCSV()" class="px-4 py-2 rounded-xl bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition active:scale-95">
+                                    Unduh CSV
+                                </button>
+                                <button onclick="resetSimulation()" class="px-4 py-2 rounded-xl bg-[#EF4444]/15 hover:bg-[#EF4444] text-[#EF4444] hover:text-white border border-[#EF4444]/40 font-bold text-xs transition active:scale-95">
+                                    Reset Simulasi
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left text-xs">
+                                <thead>
+                                    <tr class="border-b border-[#2E323B] text-neutral-400 font-semibold uppercase tracking-wider">
+                                        <th class="py-3 px-3">ID TRX</th>
+                                        <th class="py-3 px-3">Kartu / User</th>
+                                        <th class="py-3 px-3">Slot</th>
+                                        <th class="py-3 px-3">Waktu Masuk</th>
+                                        <th class="py-3 px-3">Waktu Keluar</th>
+                                        <th class="py-3 px-3">Total Bayar</th>
+                                        <th class="py-3 px-3">Metode</th>
+                                        <th class="py-3 px-3">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="admin-reports-tbody" class="divide-y divide-[#2E323B]"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: CHAT CS (SMART PARKING CS) -->
+                <div id="admin-tab-cs" class="admin-tab-panel hidden">
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl overflow-hidden grid grid-cols-1 md:grid-cols-12 min-h-[500px] shadow-2xl">
+                        <div class="md:col-span-4 border-b md:border-b-0 md:border-r border-[#2E323B] flex flex-col bg-[#141619]">
+                            <div class="p-3.5 bg-[#1E2126] border-b border-[#2E323B] flex items-center justify-between">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-9 h-9 rounded-full bg-[#22C55E]/20 border border-[#22C55E]/40 text-[#22C55E] font-bold text-xs flex items-center justify-center">CS</div>
+                                    <div>
+                                        <h3 class="text-xs font-bold text-white">Smart Parking CS</h3>
+                                        <p class="text-[10px] text-[#22C55E] font-medium">Layanan Bantuan Pengelola</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div id="admin-cs-contacts" class="flex-1 overflow-y-auto divide-y divide-[#2E323B]/50"></div>
+                        </div>
+
+                        <div class="md:col-span-8 flex flex-col bg-[#0B141A]">
+                            <div id="admin-cs-chat-header" class="p-3.5 bg-[#1E2126] border-b border-[#2E323B] flex items-center justify-between text-xs font-bold text-white"></div>
+                            <div id="admin-cs-chat-messages" class="flex-1 p-4 space-y-3 overflow-y-auto max-h-[360px]"></div>
+                            <form id="admin-cs-reply-form" onsubmit="sendAdminCsReply(event)" class="hidden p-3 bg-[#1E2126] border-t border-[#2E323B] flex gap-2">
+                                <input type="text" id="admin-cs-reply-input" required placeholder="Ketik balasan CS..." class="flex-1 px-4 py-2 rounded-xl bg-[#141619] border border-[#2E323B] text-white text-xs focus:outline-none focus:border-[#22C55E]">
+                                <button type="submit" class="px-4 py-2 rounded-xl bg-[#22C55E] text-[#141619] font-bold text-xs">Kirim</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: WADAH UNEG-UNEG MU (BOX 2D BERSIH & RAPI) -->
+                <div id="admin-tab-feedback" class="admin-tab-panel hidden space-y-6">
+                    <div class="bg-[#1E2126] border border-[#2E323B] rounded-2xl p-6 sm:p-10 space-y-6 text-center relative overflow-hidden min-h-[500px] flex flex-col items-center justify-center">
+                        <div>
+                            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#E85D4A]/15 text-[#E85D4A] text-xs font-bold mb-2">
+                                Wadah Curhat & Uneg-Uneg
+                            </span>
+                            <h3 class="text-xl sm:text-2xl font-extrabold text-white">Wadah Uneg-Uneg Mu / Curhatan Parkir 📦</h3>
+                            <p class="text-xs text-neutral-400 mt-1 max-w-md mx-auto">Klik **KOTAK CURHAT 2D** di bawah untuk menyemburkan kartu keluh kesah acak bagaikan kembang api!</p>
+                        </div>
+
+                        <!-- Visual Kotak Saran Merah 2D Rapi & Presisi -->
+                        <div class="py-4 flex flex-col items-center justify-center z-20">
+                            <button id="magic-box-btn" onclick="triggerFireworksExplosion()" class="relative group cursor-pointer focus:outline-none transition-transform duration-300 hover:scale-105 active:scale-95">
+                                <div class="relative w-56 h-48 flex flex-col items-center justify-end">
+                                    <!-- Kertas-kertas menyembul di atas slot kotak -->
+                                    <div class="flex items-end justify-center gap-1 -mb-3 z-0 transition-transform duration-300 group-hover:-translate-y-2">
+                                        <div class="w-10 h-12 bg-neutral-200 rounded-t-md border border-neutral-300 -rotate-12 shadow-sm"></div>
+                                        <div class="w-12 h-14 bg-white rounded-t-md border border-neutral-200 rotate-6 shadow-md"></div>
+                                        <div class="w-9 h-10 bg-neutral-100 rounded-t-md border border-neutral-300 rotate-12 shadow-sm"></div>
+                                    </div>
+
+                                    <!-- Tutup Kotak 2D -->
+                                    <div class="w-56 h-7 bg-gradient-to-b from-[#FF4D4D] to-[#DC2626] rounded-xl border-2 border-[#FCA5A5]/40 shadow-lg z-10 flex items-center justify-center relative">
+                                        <!-- Celah Lubang Kertas -->
+                                        <div class="w-28 h-2 bg-[#7F1D1D] rounded-full shadow-inner"></div>
+                                    </div>
+
+                                    <!-- Badan Kotak 2D Utama -->
+                                    <div class="w-52 h-32 bg-gradient-to-b from-[#DC2626] to-[#991B1B] rounded-b-2xl border-x-2 border-b-2 border-[#FCA5A5]/30 shadow-[0_18px_35px_rgba(220,38,38,0.35)] z-10 flex flex-col items-center justify-center px-4">
+                                        <span class="text-white font-black text-base tracking-wider leading-tight">WADAH</span>
+                                        <span class="text-[#F59E0B] font-black text-lg tracking-wide leading-tight">UNEG-UNEG</span>
+                                        <span class="text-white font-black text-sm tracking-widest mt-0.5 bg-black/25 px-3 py-0.5 rounded-full">MU!</span>
+                                    </div>
+
+                                    <!-- Badge Jumlah Curhatan -->
+                                    <span id="suggestion-badge-count" class="absolute top-2 -right-2 z-20 w-9 h-9 rounded-full bg-[#F59E0B] text-[#141619] font-black text-xs flex items-center justify-center border-2 border-[#1E2126] shadow-xl">3</span>
+                                </div>
+                            </button>
+                            <p class="text-xs font-bold text-[#F59E0B] mt-4 animate-pulse">Klik Kotak Untuk Menyemburkan Curhatan!</p>
+                        </div>
+
+                        <button onclick="triggerFireworksExplosion()" class="px-6 py-3 rounded-xl bg-[#EF4444] hover:bg-red-600 text-white font-extrabold text-xs shadow-xl transition active:scale-95 flex items-center gap-2">
+                            💥 Buka & Semburkan Kartu Saran
+                        </button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <footer class="py-4 text-center text-xs text-neutral-500 border-t border-[#2E323B]/50 mt-auto">
+            SmartParking Island • Sistem Parkir Cerdas IoT 2 Lantai
+        </footer>
+    </div>
+
+    <!-- LOGIKA SCRIPT JAVASCRIPT UTUH -->
+    <script>
+        let TARIF_PER_JAM = 2000;
+        let BOOKING_RATE_PER_15_MIN = 1000;
+        let BATAS_WAKTU_DETIK = 30;
+        let DENDA_NOMINAL = 5000;
+        let JAM_BUKA_PARKIR = "06.00 WIB";
+        let JAM_TUTUP_PARKIR = "22.00 WIB";
+
+        // Variabel Teks Peringatan Dinamis (Dapat diubah Pengelola)
+        let WARN_OPEN_TEXT = "⚠️ PERHATIAN: Cek & amankan barang bawaan Anda! Barang hilang/ketinggalan bukan tanggung jawab petugas parkir";
+        let WARN_CLOSED_TEXT = "🚫 MAAF, PARKIR SEDANG DITUTUP. Harap memarkir kendaraan di luar area gerbang.";
+        let WARN_FULL_DRIVER_DESC = "Seluruh slot parkir sedang terisi penuh. Silakan tunggu hingga ada kendaraan lain yang keluar.";
+
+        let currentUser = null;
+        let txCounter = 1001;
+        let totalRevenue = 0;
+        let revenueQris = 0;
+        let revenueCash = 0;
+        let countIn = 0;
+        let countOut = 0;
+        let isParkingClosed = false;
+        let isCustomLcdActive = false;
+        let pendingPaymentSlotId = null;
+        let appliedPromoDiscount = 0;
+        let selectedBookingDuration = 15;
+        let selectedLogoutRating = 5;
+        let selectedCsUser = null;
+
+        let promoVouchers = [
+            { code: 'SMKBISA', discount: 1000 },
+            { code: 'PARKIRFREE', discount: 2000 },
+            { code: 'MERDEKA', discount: 1500 }
+        ];
+
+        let feedbacks = [
+            { id: 'FB-101', user: 'siswa@smk.id', rating: 5, message: 'Fasilitas parkir 2 lantai sangat bagus dan sensor cepat merespon!', time: new Date(Date.now() - 7200000) },
+            { id: 'FB-102', user: 'budi@smk.id', rating: 4, message: 'Tarifnya terjangkau, tapi mohon tambahkan petunjuk arah di lantai 2.', time: new Date(Date.now() - 3600000) },
+            { id: 'FB-103', user: 'siti@smk.id', rating: 5, message: 'Pembayaran QRIS sangat membantu dan praktis tanpa perlu uang pas.', time: new Date(Date.now() - 1800000) }
+        ];
+
+        let csMessages = [
+            { id: 'CS-101', user: 'siswa@smk.id', avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop', message: 'Halo kak, palang parkir lantai 1 slot A1 tidak terbuka otomatis.', reply: '', status: 'Pending', time: new Date(Date.now() - 3600000 * 2), unread: 1, pinned: true },
+            { id: 'CS-102', user: 'Joni Malik', avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=100&h=100&fit=crop', message: 'Kak, tiket QR saya gagal di-scan.', reply: 'Silakan tap kartu ulang di gerbang.', status: 'Selesai', time: new Date(Date.now() - 1800000), unread: 0, pinned: false },
+            { id: 'CS-103', user: 'Maya Tiara', avatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=100&h=100&fit=crop', message: 'Tarif parkirnya sudah benar Rp 2.000 / jam kan?', reply: 'Iya betul kak, tarif standar Rp 2.000 / jam.', status: 'Selesai', time: new Date(Date.now() - 900000), unread: 0, pinned: false }
+        ];
+
+        let slots = [
+            { id: 'A1', floor: 1, occupied: false, cardNo: null, txId: null, entryTime: null, reservedBy: null, bookingDurationMin: 0, bookingExpiresAt: null, bookingFeePaid: 0 },
+            { id: 'A2', floor: 1, occupied: false, cardNo: null, txId: null, entryTime: null, reservedBy: null, bookingDurationMin: 0, bookingExpiresAt: null, bookingFeePaid: 0 },
+            { id: 'B1', floor: 2, occupied: false, cardNo: null, txId: null, entryTime: null, reservedBy: null, bookingDurationMin: 0, bookingExpiresAt: null, bookingFeePaid: 0 },
+            { id: 'B2', floor: 2, occupied: false, cardNo: null, txId: null, entryTime: null, reservedBy: null, bookingDurationMin: 0, bookingExpiresAt: null, bookingFeePaid: 0 }
+        ];
+
+        let devices = [
+            { id: 'ESP32', name: 'ESP32 Main Controller', status: 'ON' },
+            { id: 'RFID', name: 'RFID Reader Modul', status: 'ON' },
+            { id: 'SERVO1', name: 'Servo Gerbang Masuk', status: 'ON' },
+            { id: 'SERVO2', name: 'Servo Gerbang Keluar', status: 'ON' },
+            { id: 'LCD', name: 'LCD 16x2 I2C Display', status: 'ON' }
+        ];
+
+        let rfidCards = [
+            { id: 'RFID-8841A', owner: 'Andi - XI TKJ', active: true },
+            { id: 'RFID-9920B', owner: 'Siti - XII RPL', active: true },
+            { id: 'RFID-1102X', owner: 'Kartu Tersuspend', active: false }
+        ];
+
+        let transactions = [];
+
+        function formatRupiah(num) {
+            return 'Rp ' + Number(num || 0).toLocaleString('id-ID');
+        }
+
+        function formatTime(date) {
+            if (!date) return '-';
+            const d = new Date(date);
+            return d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            const colors = {
+                success: 'bg-[#22C55E] text-[#141619]',
+                error: 'bg-[#EF4444] text-white',
+                info: 'bg-[#F59E0B] text-[#141619]',
+            };
+            const toast = document.createElement('div');
+            toast.className = `pointer-events-auto px-4 py-3 rounded-xl font-bold text-xs shadow-xl transition-all duration-300 ${colors[type] || colors.info}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function generateQrSvg(text, size = 140) {
+            return `<svg width="${size}" height="${size}" viewBox="0 0 21 21" xmlns="http://www.w3.org/2000/svg" class="rounded-lg">
+                <rect width="21" height="21" fill="#ffffff"/>
+                <rect x="1" y="1" width="5" height="5" fill="#141619"/>
+                <rect x="2" y="2" width="3" height="3" fill="#ffffff"/>
+                <rect x="3" y="3" width="1" height="1" fill="#141619"/>
+                <rect x="15" y="1" width="5" height="5" fill="#141619"/>
+                <rect x="16" y="2" width="3" height="3" fill="#ffffff"/>
+                <rect x="17" y="3" width="1" height="1" fill="#141619"/>
+                <rect x="1" y="15" width="5" height="5" fill="#141619"/>
+                <rect x="2" y="16" width="3" height="3" fill="#ffffff"/>
+                <rect x="3" y="17" width="1" height="1" fill="#141619"/>
+                <rect x="8" y="2" width="2" height="2" fill="#141619"/>
+                <rect x="11" y="4" width="2" height="2" fill="#141619"/>
+                <rect x="8" y="8" width="5" height="5" fill="#141619"/>
+                <rect x="10" y="10" width="1" height="1" fill="#ffffff"/>
+                <rect x="15" y="9" width="3" height="2" fill="#141619"/>
+                <rect x="8" y="15" width="3" height="3" fill="#141619"/>
+                <rect x="13" y="14" width="4" height="2" fill="#141619"/>
+                <rect x="16" y="17" width="3" height="3" fill="#141619"/>
+            </svg>`;
+        }
+
+        function quickLogin(role) {
+            currentUser = role === 'admin' ? { email: 'admin@smartpark.id', role: 'admin' } : { email: 'siswa@smk.id', role: 'driver' };
+            applyLoginState();
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const email = document.getElementById('login-email').value.trim().toLowerCase();
+            const password = document.getElementById('login-password').value.trim();
+            const errEl = document.getElementById('login-error');
+
+            if (!email || !password) {
+                errEl.classList.remove('hidden');
+                return;
+            }
+            errEl.classList.add('hidden');
+            currentUser = email.includes('admin') ? { email, role: 'admin' } : { email, role: 'driver' };
+            applyLoginState();
+        }
+
+        function applyLoginState() {
+            const viewLogin = document.getElementById('view-login');
+            const appShell = document.getElementById('app-shell');
+            const headerEmail = document.getElementById('header-user-email');
+            const headerRole = document.getElementById('header-user-role');
+            const viewAdmin = document.getElementById('view-admin');
+            const viewDriver = document.getElementById('view-driver');
+            const btnHamburger = document.getElementById('btn-admin-hamburger');
+            const csWidget = document.getElementById('cs-widget');
+
+            if (viewLogin) viewLogin.classList.add('hidden');
+            if (appShell) appShell.classList.remove('hidden');
+            if (headerEmail && currentUser) headerEmail.textContent = currentUser.email;
+
+            const isAdmin = currentUser && currentUser.role === 'admin';
+            if (headerRole) headerRole.textContent = isAdmin ? 'Pengelola (Admin)' : 'Pengguna Biasa';
+            if (viewAdmin) viewAdmin.classList.toggle('hidden', !isAdmin);
+            if (viewDriver) viewDriver.classList.toggle('hidden', isAdmin);
+            if (btnHamburger) btnHamburger.classList.toggle('hidden', !isAdmin);
+            if (csWidget) csWidget.classList.toggle('hidden', isAdmin);
+
+            if (isAdmin) switchAdminTab('ops', false);
+            renderAll();
+            if (currentUser) showToast(`Selamat datang kembali, ${currentUser.email}`, 'success');
+        }
+
+        function handleLogout() {
+            if (currentUser && currentUser.role === 'driver') {
+                const alreadySubmitted = feedbacks.some(fb => fb.user === currentUser.email);
+                if (alreadySubmitted) {
+                    confirmLogout();
+                    return;
+                }
+                setLogoutRating(5);
+                document.getElementById('logout-feedback-message').value = '';
+                document.getElementById('logout-feedback-modal').classList.remove('hidden');
+                return;
+            }
+            confirmLogout();
+        }
+
+        function setLogoutRating(stars) {
+            selectedLogoutRating = stars;
+            const buttons = document.querySelectorAll('#logout-star-container .star-btn');
+            buttons.forEach((btn, idx) => {
+                if (idx < stars) {
+                    btn.classList.remove('text-neutral-600');
+                    btn.classList.add('text-[#F59E0B]');
+                } else {
+                    btn.classList.add('text-neutral-600');
+                    btn.classList.remove('text-[#F59E0B]');
+                }
+            });
+        }
+
+        function submitLogoutFeedback(event) {
+            event.preventDefault();
+            const message = document.getElementById('logout-feedback-message').value.trim();
+            if (message) {
+                feedbacks.unshift({
+                    id: 'FB-' + Math.floor(100 + Math.random() * 900),
+                    user: currentUser ? currentUser.email : 'siswa@smk.id',
+                    rating: selectedLogoutRating,
+                    message,
+                    time: new Date()
+                });
+                showToast('Terima kasih atas curhatan Anda!', 'success');
+            }
+            confirmLogout();
+        }
+
+        function confirmLogout() {
+            const logoutModal = document.getElementById('logout-feedback-modal');
+            const appShell = document.getElementById('app-shell');
+            const csWidget = document.getElementById('cs-widget');
+            const csChatBox = document.getElementById('cs-chat-box');
+            const viewLogin = document.getElementById('view-login');
+            const adminNavDrawer = document.getElementById('admin-nav-drawer');
+
+            if (logoutModal) logoutModal.classList.add('hidden');
+            if (appShell) appShell.classList.add('hidden');
+            if (csWidget) csWidget.classList.add('hidden');
+            if (csChatBox) csChatBox.classList.add('hidden');
+            if (viewLogin) viewLogin.classList.remove('hidden');
+            if (adminNavDrawer) adminNavDrawer.classList.add('hidden');
+
+            currentUser = null;
+            showToast('Anda telah keluar dari portal.', 'info');
+        }
+
+        function toggleAdminMenu() {
+            const drawer = document.getElementById('admin-nav-drawer');
+            if (drawer) drawer.classList.toggle('hidden');
+        }
+
+        function switchAdminTab(tabName, closeDrawer = true) {
+            const titles = {
+                ops: 'Operasional, Gerbang & Peringatan',
+                devices: 'Perangkat & LCD',
+                rfid: 'Kartu RFID, Tarif & Billing',
+                reports: 'Laporan Transaksi',
+                cs: 'Smart Parking CS',
+                feedback: 'Wadah Uneg-Uneg Mu',
+            };
+            
+            const activeTitleEl = document.getElementById('admin-active-title');
+            if (activeTitleEl) activeTitleEl.textContent = titles[tabName] || 'Operasional, Gerbang & Peringatan';
+
+            document.querySelectorAll('.admin-tab-panel').forEach(p => p.classList.add('hidden'));
+            const activePanel = document.getElementById(`admin-tab-${tabName}`);
+            if (activePanel) activePanel.classList.remove('hidden');
+
+            if (closeDrawer) {
+                const drawer = document.getElementById('admin-nav-drawer');
+                if (drawer) drawer.classList.add('hidden');
+            }
+        }
+
+        // ==========================================
+        // PENGATURAN TEKS PERINGATAN OLEH PENGELOLA
+        // ==========================================
+        function saveWarningTexts() {
+            const openInput = document.getElementById('admin-warn-open-input');
+            const closedInput = document.getElementById('admin-warn-closed-input');
+            const fullInput = document.getElementById('admin-warn-full-input');
+
+            if (openInput && openInput.value.trim()) {
+                WARN_OPEN_TEXT = openInput.value.trim();
+            }
+            if (closedInput && closedInput.value.trim()) {
+                WARN_CLOSED_TEXT = closedInput.value.trim();
+            }
+            if (fullInput && fullInput.value.trim()) {
+                WARN_FULL_DRIVER_DESC = fullInput.value.trim();
+            }
+
+            renderAll();
+            showToast('Seluruh teks peringatan & pengumuman berhasil diperbarui!', 'success');
+        }
+
+        function resetWarningTexts() {
+            WARN_OPEN_TEXT = "⚠️ PERHATIAN: Cek & amankan barang bawaan Anda! Barang hilang/ketinggalan bukan tanggung jawab petugas parkir";
+            WARN_CLOSED_TEXT = "🚫 MAAF, PARKIR SEDANG DITUTUP. Harap memarkir kendaraan di luar area gerbang.";
+            WARN_FULL_DRIVER_DESC = "Seluruh slot parkir sedang terisi penuh. Silakan tunggu hingga ada kendaraan lain yang keluar.";
+
+            const openInput = document.getElementById('admin-warn-open-input');
+            const closedInput = document.getElementById('admin-warn-closed-input');
+            const fullInput = document.getElementById('admin-warn-full-input');
+
+            if (openInput) openInput.value = WARN_OPEN_TEXT;
+            if (closedInput) closedInput.value = WARN_CLOSED_TEXT;
+            if (fullInput) fullInput.value = WARN_FULL_DRIVER_DESC;
+
+            renderAll();
+            showToast('Teks peringatan dikembalikan ke pengaturan awal.', 'info');
+        }
+
+        // ==========================================
+        // RESERVASI BOOKING SLOT & BILLING 15/30 MNT
+        // ==========================================
+        function calculateBookingPrice(minutes) {
+            const blocks = Math.ceil(minutes / 15);
+            return blocks * BOOKING_RATE_PER_15_MIN;
+        }
+
+        function openBookingModal() {
+            if (isParkingClosed) {
+                showToast('Area parkir sedang ditutup.', 'error');
+                return;
+            }
+            const availableSlots = slots.filter(s => !s.occupied && !s.reservedBy);
+            if (availableSlots.length === 0) {
+                showToast('Tidak ada slot kosong tersedia untuk dibooking saat ini.', 'error');
+                return;
+            }
+
+            const selectEl = document.getElementById('booking-slot-select');
+            selectEl.innerHTML = availableSlots.map(s => `<option value="${s.id}">Lantai ${s.floor} — Slot ${s.id}</option>`).join('');
+
+            [15, 30, 45, 60].forEach(min => {
+                const lbl = document.getElementById(`price-label-${min}`);
+                if (lbl) lbl.textContent = formatRupiah(calculateBookingPrice(min));
+            });
+
+            document.getElementById('booking-qr-mini').innerHTML = generateQrSvg('BOOKING-SMARTPARK', 68);
+            selectBookingDuration(15);
+            document.getElementById('booking-modal').classList.remove('hidden');
+        }
+
+        function closeBookingModal() {
+            document.getElementById('booking-modal').classList.add('hidden');
+        }
+
+        function selectBookingDuration(minutes) {
+            selectedBookingDuration = minutes;
+            const totalFee = calculateBookingPrice(minutes);
+
+            document.querySelectorAll('#booking-duration-options .dur-btn').forEach(btn => {
+                const btnMin = parseInt(btn.getAttribute('data-min'), 10);
+                if (btnMin === minutes) {
+                    btn.className = 'dur-btn p-2.5 rounded-xl bg-[#F59E0B] text-[#141619] font-bold text-xs text-left transition border border-[#F59E0B]';
+                    btn.querySelector('span:last-child').className = 'text-[10px] opacity-85 font-mono';
+                } else {
+                    btn.className = 'dur-btn p-2.5 rounded-xl bg-[#141619] text-neutral-300 font-bold text-xs text-left transition border border-[#2E323B] hover:border-[#F59E0B]';
+                    btn.querySelector('span:last-child').className = 'text-[10px] text-neutral-400 font-mono';
+                }
+            });
+
+            document.getElementById('booking-rate-info').textContent = `${formatRupiah(BOOKING_RATE_PER_15_MIN)} / 15 menit`;
+            document.getElementById('booking-selected-duration-text').textContent = `${minutes} Menit`;
+            document.getElementById('booking-total-price').textContent = formatRupiah(totalFee);
+        }
+
+        function confirmBookingPayment() {
+            const slotId = document.getElementById('booking-slot-select').value;
+            const slot = slots.find(s => s.id === slotId);
+            if (!slot || slot.occupied || slot.reservedBy) {
+                showToast('Slot sudah tidak tersedia.', 'error');
+                closeBookingModal();
+                return;
+            }
+
+            const fee = calculateBookingPrice(selectedBookingDuration);
+            const userEmail = currentUser ? currentUser.email : 'siswa@smk.id';
+            const now = new Date();
+            const txId = 'BKG-' + txCounter++;
+
+            slot.reservedBy = userEmail;
+            slot.bookingDurationMin = selectedBookingDuration;
+            slot.bookingExpiresAt = Date.now() + (selectedBookingDuration * 60 * 1000);
+            slot.bookingFeePaid = fee;
+
+            totalRevenue += fee;
+            revenueQris += fee;
+
+            transactions.unshift({
+                txId,
+                cardNo: userEmail,
+                slotId: slot.id,
+                entryTime: now,
+                exitTime: now,
+                tarif: fee,
+                denda: 0,
+                method: `Booking ${selectedBookingDuration}m (QRIS)`,
+                status: 'Terbayar (Booking)'
+            });
+
+            closeBookingModal();
+            renderAll();
+            showToast(`Booking Slot ${slot.id} (${selectedBookingDuration} menit) berhasil dibayar ${formatRupiah(fee)}!`, 'success');
+        }
+
+        function updateBookingRate() {
+            const val = parseInt(document.getElementById('admin-booking-rate-input').value, 10);
+            if (isNaN(val) || val < 500) {
+                showToast('Masukkan tarif booking minimal Rp 500.', 'error');
+                return;
+            }
+            BOOKING_RATE_PER_15_MIN = val;
+            renderAll();
+            showToast(`Billing booking diperbarui: ${formatRupiah(BOOKING_RATE_PER_15_MIN)} / 15 menit.`, 'success');
+        }
+
+        // ==========================================
+        // VOUCHER PROMO
+        // ==========================================
+        function applyPromoVoucher() {
+            const input = document.getElementById('promo-code-input');
+            const statusText = document.getElementById('promo-status-text');
+            if (!input) return;
+            const code = input.value.trim().toUpperCase();
+
+            const found = promoVouchers.find(v => v.code === code);
+            if (found) {
+                appliedPromoDiscount = found.discount;
+                if (statusText) {
+                    statusText.textContent = `Voucher ${code} aktif (-${formatRupiah(found.discount)})`;
+                    statusText.classList.remove('hidden');
+                }
+                showToast(`Kode promo ${code} berhasil digunakan!`, 'success');
+                renderAll();
+            } else {
+                appliedPromoDiscount = 0;
+                if (statusText) statusText.classList.add('hidden');
+                showToast('Kode promo tidak valid atau kadaluarsa.', 'error');
+            }
+        }
+
+        function addNewPromoCode(event) {
+            event.preventDefault();
+            const codeInput = document.getElementById('new-promo-code');
+            const discInput = document.getElementById('new-promo-discount');
+            if (!codeInput || !discInput) return;
+
+            const code = codeInput.value.trim().toUpperCase();
+            const discount = parseInt(discInput.value, 10);
+
+            if (!code || isNaN(discount)) return;
+            promoVouchers.push({ code, discount });
+            codeInput.value = '';
+            discInput.value = '';
+            renderAll();
+            showToast(`Voucher ${code} berhasil ditambahkan!`, 'success');
+        }
+
+        function deletePromoCode(code) {
+            promoVouchers = promoVouchers.filter(v => v.code !== code);
+            renderAll();
+            showToast(`Voucher ${code} dihapus.`, 'info');
+        }
+
+        // ==========================================
+        // SEMBURAN KEMBANG API UNEG-UNEG BOX
+        // ==========================================
+        function triggerFireworksExplosion() {
+            const canvas = document.getElementById('fireworks-canvas');
+            if (!canvas) return;
+
+            canvas.querySelectorAll('.fireworks-card').forEach(c => c.remove());
+
+            if (feedbacks.length === 0) {
+                showToast('Wadah uneg-uneg masih kosong.', 'info');
+                return;
+            }
+
+            feedbacks.forEach((fb, idx) => {
+                const angle = (idx / feedbacks.length) * 2 * Math.PI + (Math.random() * 0.4 - 0.2);
+                const distance = 140 + (idx % 2 === 0 ? 50 : 100) + Math.random() * 40;
+                const x = Math.cos(angle) * distance;
+                const y = Math.sin(angle) * distance;
+                const rot = (Math.random() * 44) - 22;
+
+                const card = document.createElement('div');
+                card.className = `fireworks-card absolute bg-white text-[#141619] p-4 rounded-xl shadow-[0_15px_30px_rgba(0,0,0,0.4)] border-2 border-red-100 w-56 sm:w-64 cursor-pointer hover:scale-110 hover:z-50 transition-all duration-200 space-y-1.5`;
+                card.style.setProperty('--tw-translateX', `${x}px`);
+                card.style.setProperty('--tw-translateY', `${y}px`);
+                card.style.setProperty('--tw-rotate', `${rot}deg`);
+                card.style.animationDelay = `${idx * 0.12}s`;
+                card.style.left = '50%';
+                card.style.top = '50%';
+
+                card.innerHTML = `
+                    <div class="flex justify-between items-center border-b border-neutral-100 pb-1.5">
+                        <span class="text-xs font-bold text-[#EF4444]">${'★'.repeat(fb.rating || 5)}</span>
+                        <span class="text-[10px] text-neutral-400 font-mono">${fb.user.split('@')[0]}</span>
+                    </div>
+                    <p class="text-xs font-semibold text-neutral-800 line-clamp-2">"${fb.message}"</p>
+                    <span class="block text-[9px] text-[#EF4444] font-extrabold text-right pt-1">Klik Untuk Detail →</span>
+                `;
+                card.onclick = () => openDetailFeedback(fb.id);
+                canvas.appendChild(card);
+            });
+
+            document.getElementById('suggestion-burst-modal').classList.remove('hidden');
+            showToast('💥 Semburan curhatan uneg-uneg berhasil dipicu!', 'success');
+        }
+
+        function closeSuggestionBurst() {
+            document.getElementById('suggestion-burst-modal').classList.add('hidden');
+        }
+
+        function openDetailFeedback(id) {
+            const fb = feedbacks.find(f => f.id === id);
+            if (!fb) return;
+
+            document.getElementById('detail-feedback-stars').textContent = '★'.repeat(fb.rating || 5);
+            document.getElementById('detail-feedback-user').textContent = fb.user;
+            document.getElementById('detail-feedback-message').textContent = fb.message;
+            document.getElementById('detail-feedback-time').textContent = formatTime(fb.time);
+            
+            const btnDelete = document.getElementById('btn-delete-detail-feedback');
+            btnDelete.onclick = () => {
+                feedbacks = feedbacks.filter(f => f.id !== id);
+                closeDetailFeedbackModal();
+                triggerFireworksExplosion();
+                renderAll();
+                showToast('Uneg-uneg telah dihapus.', 'info');
+            };
+
+            document.getElementById('read-feedback-modal').classList.remove('hidden');
+        }
+
+        function closeDetailFeedbackModal() {
+            document.getElementById('read-feedback-modal').classList.add('hidden');
+        }
+
+        // ==========================================
+        // CHAT CS
+        // ==========================================
+        function selectCsUser(userEmail) {
+            selectedCsUser = userEmail;
+            const target = csMessages.find(m => m.user === userEmail);
+            if (target) target.unread = 0;
+            renderAll();
+        }
+
+        function togglePinCsUser(event, userEmail) {
+            event.stopPropagation();
+            const target = csMessages.find(m => m.user === userEmail);
+            if (target) {
+                target.pinned = !target.pinned;
+                renderAll();
+                showToast(target.pinned ? `Obrolan ${userEmail} disematkan.` : `Sematkan obrolan ${userEmail} dilepas.`, 'info');
+            }
+        }
+
+        function changeCsStatus(userEmail, newStatus) {
+            const target = csMessages.find(m => m.user === userEmail);
+            if (target) {
+                target.status = newStatus;
+                renderAll();
+                showToast(`Status chat ${userEmail} diubah ke: ${newStatus}`, 'success');
+            }
+        }
+
+        function sendAdminCsReply(event) {
+            event.preventDefault();
+            if (!selectedCsUser) return;
+            const input = document.getElementById('admin-cs-reply-input');
+            const replyText = input.value.trim();
+            if (!replyText) return;
+
+            const targetMsg = csMessages.find(m => m.user === selectedCsUser);
+            if (targetMsg) {
+                targetMsg.reply = replyText;
+                if (targetMsg.status === 'Pending') targetMsg.status = 'Berlangsung';
+                targetMsg.time = new Date();
+            }
+            input.value = '';
+            renderAll();
+            showToast(`Balasan CS terkirim ke ${selectedCsUser}.`, 'success');
+        }
+
+        function toggleCsChat() {
+            document.getElementById('cs-chat-box').classList.toggle('hidden');
+        }
+
+        function sendCsMessage(event) {
+            event.preventDefault();
+            const input = document.getElementById('cs-chat-input');
+            const message = input ? input.value.trim() : '';
+            if (!message) return;
+
+            const userEmail = currentUser ? currentUser.email : 'siswa@smk.id';
+            let existing = csMessages.find(m => m.user === userEmail);
+            if (existing) {
+                existing.message = message;
+                existing.time = new Date();
+                existing.status = 'Pending';
+                existing.unread += 1;
+            } else {
+                csMessages.unshift({
+                    id: 'CS-' + Math.floor(100 + Math.random() * 900),
+                    user: userEmail,
+                    avatar: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100&h=100&fit=crop',
+                    message,
+                    reply: '',
+                    status: 'Pending',
+                    time: new Date(),
+                    unread: 1,
+                    pinned: false
+                });
+            }
+            input.value = '';
+            renderAll();
+            showToast('Pesan keluhan dikirim ke CS Pengelola.', 'success');
+        }
+
+        // ==========================================
+        // PARKIR OPERATIONS
+        // ==========================================
+        function simulateEntry() {
+            if (isParkingClosed) {
+                showToast('Area parkir sedang ditutup oleh pengelola.', 'error');
+                return;
+            }
+            const userEmail = currentUser ? currentUser.email : 'siswa@smk.id';
+            let targetSlot = slots.find(s => !s.occupied && s.reservedBy === userEmail);
+            if (!targetSlot) {
+                targetSlot = slots.find(s => !s.occupied && !s.reservedBy);
+            }
+            if (!targetSlot) {
+                showToast('Maaf, seluruh slot parkir sudah terisi atau dibooking.', 'error');
+                return;
+            }
+
+            const activeCard = rfidCards.find(c => c.active);
+            if (!activeCard) {
+                showToast('Akses Ditolak: Kartu RFID berstatus DIBLOKIR atau tidak ditemukan!', 'error');
+                return;
+            }
+
+            const txId = 'TRX-' + txCounter++;
+            const now = new Date();
+
+            targetSlot.occupied = true;
+            targetSlot.reservedBy = null;
+            targetSlot.bookingDurationMin = 0;
+            targetSlot.bookingExpiresAt = null;
+            targetSlot.cardNo = activeCard.id;
+            targetSlot.txId = txId;
+            targetSlot.entryTime = now;
+            countIn++;
+
+            transactions.unshift({
+                txId,
+                cardNo: activeCard.id,
+                slotId: targetSlot.id,
+                entryTime: now,
+                exitTime: null,
+                tarif: 0,
+                denda: 0,
+                method: '-',
+                status: 'Parkir'
+            });
+
+            flashServo('status-servo-1', 'Terbuka');
+            renderAll();
+            showToast(`Gerbang Masuk Terbuka! Silakan parkir di Slot ${targetSlot.id}.`, 'success');
+        }
+
+        function openPaymentPage(slotId) {
+            const slot = slots.find(s => s.id === slotId);
+            if (!slot || !slot.occupied) return;
+
+            const elapsedSec = Math.floor((Date.now() - new Date(slot.entryTime).getTime()) / 1000);
+            const denda = elapsedSec > BATAS_WAKTU_DETIK ? DENDA_NOMINAL : 0;
+            const totalBayar = TARIF_PER_JAM + denda;
+
+            pendingPaymentSlotId = slotId;
+            appliedPromoDiscount = 0;
+            const promoInput = document.getElementById('promo-code-input');
+            const promoStatus = document.getElementById('promo-status-text');
+            if (promoInput) promoInput.value = '';
+            if (promoStatus) promoStatus.classList.add('hidden');
+
+            document.getElementById('pay-tx-id').textContent = slot.txId;
+            document.getElementById('pay-slot-card').textContent = `Slot ${slot.id} (${slot.cardNo})`;
+            document.getElementById('pay-total-tarif').textContent = formatRupiah(totalBayar);
+            document.getElementById('pay-qr-container').innerHTML = generateQrSvg(slot.txId);
+            document.getElementById('payment-modal').classList.remove('hidden');
+        }
+
+        function closePaymentPage() {
+            pendingPaymentSlotId = null;
+            document.getElementById('payment-modal').classList.add('hidden');
+        }
+
+        function confirmQrPayment() {
+            if (!pendingPaymentSlotId) return;
+            completeExitTransaction(pendingPaymentSlotId, 'QRIS');
+            closePaymentPage();
+        }
+
+        function completeExitTransaction(slotId, method) {
+            const slot = slots.find(s => s.id === slotId);
+            if (!slot || !slot.occupied) return;
+
+            const now = new Date();
+            const elapsedSec = Math.floor((now.getTime() - new Date(slot.entryTime).getTime()) / 1000);
+            const denda = elapsedSec > BATAS_WAKTU_DETIK ? DENDA_NOMINAL : 0;
+            let tarif = TARIF_PER_JAM + denda - appliedPromoDiscount;
+            if (tarif < 0) tarif = 0;
+
+            const tx = transactions.find(t => t.txId === slot.txId);
+            if (tx) {
+                tx.exitTime = now;
+                tx.tarif = tarif;
+                tx.denda = denda;
+                tx.method = method + (appliedPromoDiscount > 0 ? ' (Promo)' : '');
+                tx.status = `Selesai (${method})`;
+            }
+
+            totalRevenue += tarif;
+            if (method === 'QRIS') revenueQris += tarif;
+            else revenueCash += tarif;
+            countOut++;
+
+            slot.occupied = false;
+            slot.cardNo = null;
+            slot.txId = null;
+            slot.entryTime = null;
+
+            flashServo('status-servo-2', 'Terbuka');
+            renderAll();
+            showToast(`Pembayaran ${method} ${formatRupiah(tarif)} Berhasil. Gerbang Keluar Terbuka!`, 'success');
+        }
+
+        function flashServo(elId, openText) {
+            const el = document.getElementById(elId);
+            if (!el) return;
+            el.textContent = openText;
+            el.className = 'text-xs font-bold text-[#22C55E]';
+            setTimeout(() => {
+                el.textContent = 'Tertutup';
+                el.className = 'text-xs font-bold text-neutral-300';
+            }, 2500);
+        }
+
+        function toggleDeviceStatus(id) {
+            const dev = devices.find(d => d.id === id);
+            if (!dev) return;
+            dev.status = dev.status === 'ON' ? 'ERROR' : 'ON';
+            renderAll();
+            showToast(`${dev.name} diubah ke status ${dev.status}.`, dev.status === 'ON' ? 'success' : 'error');
+        }
+
+        function sendCustomLCD() {
+            const l1 = document.getElementById('lcd-input-1').value.trim() || 'SMARTPARK ISLAND';
+            const l2 = document.getElementById('lcd-input-2').value.trim() || 'SELAMAT DATANG';
+            isCustomLcdActive = true;
+            document.getElementById('lcd-line-1').textContent = l1.toUpperCase();
+            document.getElementById('lcd-line-2').textContent = l2.toUpperCase();
+            showToast('Teks LCD khusus diperbarui.', 'success');
+        }
+
+        function resetCustomLCD() {
+            isCustomLcdActive = false;
+            document.getElementById('lcd-input-1').value = '';
+            document.getElementById('lcd-input-2').value = '';
+            renderAll();
+            showToast('LCD dikembalikan ke mode tampilan default.', 'info');
+        }
+
+        function scanRfidForRegistration() {
+            const rfidDev = devices.find(d => d.id === 'RFID');
+            if (rfidDev && rfidDev.status === 'ERROR') {
+                showToast('Gagal membaca: Perangkat RFID Reader berstatus ERROR!', 'error');
+                return;
+            }
+            const generatedId = 'RFID-' + Math.random().toString(36).substring(2, 7).toUpperCase();
+            document.getElementById('rfid-input-id').value = generatedId;
+            showToast(`Kartu terdeteksi: ${generatedId}`, 'success');
+        }
+
+        function registerRfidCard(event) {
+            event.preventDefault();
+            const id = document.getElementById('rfid-input-id').value.trim();
+            const owner = document.getElementById('rfid-input-owner').value.trim();
+            if (!id) {
+                showToast('Tap kartu ke RFID Reader terlebih dahulu!', 'error');
+                return;
+            }
+            rfidCards.unshift({ id, owner, active: true });
+            document.getElementById('rfid-input-id').value = '';
+            document.getElementById('rfid-input-owner').value = '';
+            renderAll();
+            showToast(`Kartu ${id} berhasil didaftarkan untuk ${owner}.`, 'success');
+        }
+
+        function toggleRfidActive(cardId) {
+            const card = rfidCards.find(c => c.id === cardId);
+            if (!card) return;
+            card.active = !card.active;
+            renderAll();
+            showToast(`Kartu ${cardId} ${card.active ? 'diaktifkan' : 'diblokir'}.`, 'info');
+        }
+
+        function updateTarifPerJam() {
+            const val = parseInt(document.getElementById('admin-tarif-input').value, 10);
+            if (isNaN(val) || val < 0) {
+                showToast('Masukkan nominal tarif yang valid.', 'error');
+                return;
+            }
+            TARIF_PER_JAM = val;
+            renderAll();
+            showToast(`Tarif parkir diperbarui menjadi ${formatRupiah(TARIF_PER_JAM)} / jam.`, 'success');
+        }
+
+        function updateDendaSettings() {
+            const limitVal = parseInt(document.getElementById('admin-denda-limit').value, 10);
+            const amountVal = parseInt(document.getElementById('admin-denda-amount').value, 10);
+            if (isNaN(limitVal) || limitVal < 5 || isNaN(amountVal) || amountVal < 0) {
+                showToast('Masukkan batas waktu dan nominal denda yang valid.', 'error');
+                return;
+            }
+            BATAS_WAKTU_DETIK = limitVal;
+            DENDA_NOMINAL = amountVal;
+            renderAll();
+            showToast(`Denda diatur: > ${BATAS_WAKTU_DETIK} detik dikenakan ${formatRupiah(DENDA_NOMINAL)}.`, 'success');
+        }
+
+        function exportTransactionsCSV() {
+            const header = 'ID Transaksi,ID Kartu,Slot,Waktu Masuk,Waktu Keluar,Total Tarif,Metode,Status\n';
+            const rows = transactions.map(t =>
+                `${t.txId},${t.cardNo},${t.slotId},${formatTime(t.entryTime)},${formatTime(t.exitTime)},${t.tarif},${t.method},${t.status}`
+            ).join('\n');
+            const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'laporan_smartparking.csv';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('Laporan CSV berhasil diunduh.', 'success');
+        }
+
+        function resetSimulation() {
+            slots.forEach(s => {
+                s.occupied = false;
+                s.cardNo = null;
+                s.txId = null;
+                s.entryTime = null;
+                s.reservedBy = null;
+                s.bookingDurationMin = 0;
+                s.bookingExpiresAt = null;
+                s.bookingFeePaid = 0;
+            });
+            totalRevenue = 0;
+            revenueQris = 0;
+            revenueCash = 0;
+            countIn = 0;
+            countOut = 0;
+            transactions = [];
+            renderAll();
+            showToast('Simulasi parkir berhasil direset.', 'info');
+        }
+
+        function manualGateEntry() { simulateEntry(); }
+        function manualGateExitCash() {
+            const occupied = slots.find(s => s.occupied);
+            if (!occupied) {
+                showToast('Tidak ada kendaraan yang sedang parkir.', 'error');
+                return;
+            }
+            completeExitTransaction(occupied.id, 'Tunai');
+        }
+
+        function emergencyOpenAllGates() {
+            flashServo('status-servo-1', 'DARURAT TERBUKA');
+            flashServo('status-servo-2', 'DARURAT TERBUKA');
+            showToast('Mode Darurat: Seluruh gerbang parkir dibuka!', 'error');
+        }
+
+        function toggleParkingClosed() {
+            isParkingClosed = !isParkingClosed;
+            const btn = document.getElementById('btn-toggle-parking-closed');
+            if (btn) {
+                btn.textContent = isParkingClosed ? 'Buka Kembali Area Parkir' : 'Tutup Area Parkir';
+            }
+            showToast(isParkingClosed ? 'Area parkir ditutup.' : 'Area parkir dibuka kembali.', 'info');
+            renderAll();
+        }
+
+        function updateOperationalHours() {
+            const bukaInput = document.getElementById('admin-jam-buka');
+            const tutupInput = document.getElementById('admin-jam-tutup');
+            if (bukaInput) JAM_BUKA_PARKIR = bukaInput.value.trim() || "06.00 WIB";
+            if (tutupInput) JAM_TUTUP_PARKIR = tutupInput.value.trim() || "22.00 WIB";
+            renderAll();
+            showToast(`Jam operasional diperbarui: ${JAM_BUKA_PARKIR} - ${JAM_TUTUP_PARKIR}`, 'success');
+        }
+
+        // ==========================================
+        // RENDER UTAMA DOM
+        // ==========================================
+        function renderAll() {
+            slots.forEach(s => {
+                if (s.reservedBy && s.bookingExpiresAt && Date.now() > s.bookingExpiresAt) {
+                    s.reservedBy = null;
+                    s.bookingDurationMin = 0;
+                    s.bookingExpiresAt = null;
+                    s.bookingFeePaid = 0;
+                }
+            });
+
+            const emptyCount = slots.filter(s => !s.occupied && !s.reservedBy).length;
+            const occupiedCount = slots.filter(s => s.occupied).length;
+
+            // Update Running Text Marquee berdasarkan pengaturan Pengelola
+            const marqueeTextEl = document.getElementById('marquee-text-content');
+            const marqueeBannerEl = document.getElementById('parking-marquee-banner');
+            if (marqueeTextEl && marqueeBannerEl) {
+                if (isParkingClosed) {
+                    marqueeBannerEl.className = "w-full bg-[#EF4444]/20 border-b border-[#EF4444]/40 overflow-hidden py-2 px-4 flex items-center shadow-md";
+                    marqueeTextEl.className = "animate-marquee font-mono text-xs font-bold text-[#EF4444] tracking-wide";
+                    marqueeTextEl.textContent = `${WARN_CLOSED_TEXT} ✦ Buka kembali Jam ${JAM_BUKA_PARKIR}`;
+                } else {
+                    marqueeBannerEl.className = "w-full bg-[#1E2126] border-b border-[#2E323B] overflow-hidden py-2 px-4 flex items-center shadow-md";
+                    marqueeTextEl.className = "animate-marquee font-mono text-xs font-bold text-[#F59E0B] tracking-wide";
+                    marqueeTextEl.textContent = `${WARN_OPEN_TEXT} ✦ ⏰ Jam Operasional Parkir: Buka Jam ${JAM_BUKA_PARKIR} - Tutup Jam ${JAM_TUTUP_PARKIR}`;
+                }
+            }
+
+            if (!isCustomLcdActive) {
+                const l1El = document.getElementById('lcd-line-1');
+                const l2El = document.getElementById('lcd-line-2');
+                if (l1El && l2El) {
+                    l1El.textContent = 'SMARTPARK ISLAND';
+                    if (isParkingClosed) {
+                        l2El.textContent = 'PARKIR DITUTUP';
+                    } else {
+                        l2El.textContent = emptyCount > 0 ? `KOSONG: ${emptyCount} SLOT` : 'MAAF: PARKIR PENUH';
+                    }
+                }
+            }
+
+            const driverCountEl = document.getElementById('driver-available-count');
+            if (driverCountEl) driverCountEl.textContent = emptyCount;
+
+            const fullAlertEl = document.getElementById('driver-full-alert');
+            const fullAlertDescEl = document.getElementById('driver-full-alert-desc');
+            if (fullAlertEl) {
+                fullAlertEl.classList.toggle('hidden', emptyCount > 0);
+                if (fullAlertDescEl) fullAlertDescEl.textContent = WARN_FULL_DRIVER_DESC;
+            }
+
+            const nearestEl = document.getElementById('driver-nearest-slot');
+            if (nearestEl) {
+                const firstAvailable = slots.find(s => !s.occupied && !s.reservedBy);
+                nearestEl.textContent = firstAvailable ? `Lantai ${firstAvailable.floor} - Slot ${firstAvailable.id}` : 'Penuh / Direservasi';
+            }
+
+            const driverTarifEl = document.getElementById('driver-tarif-info');
+            if (driverTarifEl) driverTarifEl.textContent = `${formatRupiah(TARIF_PER_JAM)} / jam`;
+
+            const driverBookingRateEl = document.getElementById('driver-booking-rate-info');
+            if (driverBookingRateEl) driverBookingRateEl.textContent = `${formatRupiah(BOOKING_RATE_PER_15_MIN)} / 15 mnt`;
+
+            ['floor-1-slots', 'floor-2-slots'].forEach((containerId, idx) => {
+                const el = document.getElementById(containerId);
+                if (!el) return;
+                const floorNum = idx + 1;
+                const floorSlots = slots.filter(s => s.floor === floorNum);
+
+                el.innerHTML = floorSlots.map(s => {
+                    let statusBadge = '';
+                    let infoHtml = '';
+                    let cardStyle = '';
+
+                    if (s.occupied) {
+                        cardStyle = 'bg-[#E85D4A]/10 border-[#E85D4A]/40 text-[#E85D4A]';
+                        statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#E85D4A] text-white">TERISI</span>`;
+                        infoHtml = `<p class="font-mono text-white text-[11px] truncate">${s.cardNo}</p><p class="text-neutral-400 text-[10px] mt-0.5">${formatTime(s.entryTime)}</p>`;
+                    } else if (s.reservedBy) {
+                        const remSec = Math.max(0, Math.floor((s.bookingExpiresAt - Date.now()) / 1000));
+                        const mins = Math.floor(remSec / 60);
+                        const secs = remSec % 60;
+                        cardStyle = 'bg-[#F59E0B]/10 border-[#F59E0B]/40 text-[#F59E0B]';
+                        statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#F59E0B] text-[#141619]">BOOKING (${s.bookingDurationMin}m)</span>`;
+                        infoHtml = `
+                            <p class="text-[#F59E0B] text-[10px] font-bold truncate">Oleh: ${s.reservedBy.split('@')[0]}</p>
+                            <p class="text-white font-mono text-[10px] mt-0.5">Sisa: ${mins}m ${secs < 10 ? '0' : ''}${secs}d • ${formatRupiah(s.bookingFeePaid)}</p>
+                        `;
+                    } else {
+                        cardStyle = 'bg-[#22C55E]/10 border-[#22C55E]/40 text-[#22C55E]';
+                        statusBadge = `<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#22C55E] text-[#141619]">KOSONG</span>`;
+                        infoHtml = `<p class="text-neutral-400 text-[11px]">Siap Digunakan</p>`;
+                    }
+
+                    return `
+                        <div class="p-4 rounded-xl border flex flex-col justify-between h-32 transition ${cardStyle}">
+                            <div class="flex items-center justify-between gap-1">
+                                <span class="font-mono font-bold text-sm text-white">Slot ${s.id}</span>
+                                ${statusBadge}
+                            </div>
+                            <div class="text-xs">${infoHtml}</div>
+                        </div>
+                    `;
+                }).join('');
+            });
+
+            const activeTicketsEl = document.getElementById('active-tickets-list');
+            if (activeTicketsEl) {
+                const activeSlots = slots.filter(s => s.occupied);
+                if (activeSlots.length === 0) {
+                    activeTicketsEl.innerHTML = `<p class="text-xs text-neutral-500 col-span-full text-center py-4">Belum ada tiket parkir aktif.</p>`;
+                } else {
+                    activeTicketsEl.innerHTML = activeSlots.map(s => {
+                        const elapsedSec = Math.floor((Date.now() - new Date(s.entryTime).getTime()) / 1000);
+                        const isDenda = elapsedSec > BATAS_WAKTU_DETIK;
+                        return `
+                            <div class="p-4 rounded-xl bg-[#141619] border border-[#2E323B] space-y-3">
+                                <div class="flex items-center justify-between border-b border-[#2E323B] pb-2">
+                                    <span class="font-mono font-bold text-xs text-[#F59E0B]">${s.txId}</span>
+                                    <span class="text-xs font-bold text-white">Slot ${s.id}</span>
+                                </div>
+                                <div class="text-xs space-y-1 text-neutral-300">
+                                    <p>Masuk: <span class="font-mono text-white">${formatTime(s.entryTime)}</span></p>
+                                    <p>Durasi: <span class="font-mono font-bold ${isDenda ? 'text-[#E85D4A]' : 'text-[#22C55E]'}">${elapsedSec} detik</span></p>
+                                    ${isDenda ? `<p class="text-[10px] text-[#E85D4A] font-bold">Terkena Denda: ${formatRupiah(DENDA_NOMINAL)}</p>` : ''}
+                                </div>
+                                <button onclick="openPaymentPage('${s.id}')" class="w-full py-2 px-3 rounded-lg bg-[#22C55E] hover:bg-green-500 text-[#141619] font-bold text-xs transition">
+                                    Bayar QR & Keluar
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            const driverHistoryEl = document.getElementById('driver-history-list');
+            if (driverHistoryEl) {
+                const finishedTx = transactions.filter(t => t.exitTime);
+                if (finishedTx.length === 0) {
+                    driverHistoryEl.innerHTML = `<p class="text-xs text-neutral-500 text-center py-4">Belum ada riwayat parkir atau booking yang selesai.</p>`;
+                } else {
+                    driverHistoryEl.innerHTML = finishedTx.map(tx => `
+                        <div class="p-3 rounded-xl bg-[#141619] border border-[#2E323B] flex items-center justify-between text-xs">
+                            <div>
+                                <span class="font-mono font-bold text-white">${tx.txId}</span>
+                                <span class="text-neutral-400 ml-2">Slot ${tx.slotId} • ${formatTime(tx.entryTime)}</span>
+                            </div>
+                            <div class="text-right">
+                                <span class="font-bold text-[#F59E0B] block">${formatRupiah(tx.tarif)}</span>
+                                <span class="text-[10px] text-neutral-400">${tx.method}</span>
+                            </div>
+                        </div>
+                    `).join('');
+                }
+            }
+
+            const parkCountEl = document.getElementById('admin-parked-count');
+            if (parkCountEl) parkCountEl.textContent = occupiedCount;
+
+            const countInEl = document.getElementById('admin-count-in');
+            if (countInEl) countInEl.textContent = countIn;
+
+            const countOutEl = document.getElementById('admin-count-out');
+            if (countOutEl) countOutEl.textContent = countOut;
+
+            const revQrisEl = document.getElementById('admin-revenue-qris');
+            if (revQrisEl) revQrisEl.textContent = formatRupiah(revenueQris);
+
+            const revEl = document.getElementById('admin-revenue');
+            if (revEl) revEl.textContent = formatRupiah(totalRevenue);
+
+            const devListEl = document.getElementById('admin-device-list');
+            if (devListEl) {
+                devListEl.innerHTML = devices.map(d => `
+                    <div onclick="toggleDeviceStatus('${d.id}')" class="p-3.5 rounded-xl bg-[#141619] border border-[#2E323B] flex items-center justify-between cursor-pointer hover:border-[#F59E0B] transition">
+                        <span class="text-xs font-bold text-white">${d.name}</span>
+                        <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold ${d.status === 'ON' ? 'bg-[#22C55E]/20 text-[#22C55E]' : 'bg-[#EF4444]/20 text-[#EF4444]'}">
+                            ${d.status}
+                        </span>
+                    </div>
+                `).join('');
+            }
+
+            const reportsBody = document.getElementById('admin-reports-tbody');
+            if (reportsBody) {
+                if (transactions.length === 0) {
+                    reportsBody.innerHTML = `<tr><td colspan="8" class="text-center py-6 text-neutral-500">Belum ada data transaksi parkir.</td></tr>`;
+                } else {
+                    reportsBody.innerHTML = transactions.map(t => `
+                        <tr class="hover:bg-[#141619]/50 transition">
+                            <td class="py-3 px-3 font-mono font-bold text-[#F59E0B]">${t.txId}</td>
+                            <td class="py-3 px-3 font-mono text-neutral-300">${t.cardNo}</td>
+                            <td class="py-3 px-3 font-bold text-white">${t.slotId}</td>
+                            <td class="py-3 px-3 text-neutral-400">${formatTime(t.entryTime)}</td>
+                            <td class="py-3 px-3 text-neutral-400">${formatTime(t.exitTime)}</td>
+                            <td class="py-3 px-3 font-bold text-white">${formatRupiah(t.tarif)}</td>
+                            <td class="py-3 px-3"><span class="px-2 py-0.5 rounded bg-[#2E323B] text-neutral-300 text-[10px] font-semibold">${t.method}</span></td>
+                            <td class="py-3 px-3 font-bold ${t.exitTime ? 'text-[#22C55E]' : 'text-[#F59E0B]'}">${t.status}</td>
+                        </tr>
+                    `).join('');
+                }
+            }
+
+            const rfidListEl = document.getElementById('admin-rfid-list');
+            if (rfidListEl) {
+                rfidListEl.innerHTML = rfidCards.map(c => `
+                    <div class="p-3 rounded-xl bg-[#141619] border border-[#2E323B] flex items-center justify-between gap-2">
+                        <div>
+                            <p class="text-xs font-mono font-bold text-[#F59E0B]">${c.id}</p>
+                            <p class="text-[11px] text-neutral-300">${c.owner}</p>
+                        </div>
+                        <button onclick="toggleRfidActive('${c.id}')" class="px-2.5 py-1 rounded-lg text-[10px] font-bold ${c.active ? 'bg-[#22C55E]/15 text-[#22C55E]' : 'bg-[#EF4444]/15 text-[#EF4444]'}">
+                            ${c.active ? 'Aktif' : 'Diblokir'}
+                        </button>
+                    </div>
+                `).join('');
+            }
+
+            const voucherListEl = document.getElementById('admin-voucher-list');
+            if (voucherListEl) {
+                voucherListEl.innerHTML = promoVouchers.map(v => `
+                    <div class="p-3 rounded-xl bg-[#141619] border border-[#2E323B] flex items-center justify-between text-xs">
+                        <div>
+                            <span class="font-mono font-bold text-[#F59E0B]">${v.code}</span>
+                            <span class="text-neutral-400 block text-[10px]">Diskon ${formatRupiah(v.discount)}</span>
+                        </div>
+                        <button onclick="deletePromoCode('${v.code}')" class="px-2.5 py-1 rounded bg-[#EF4444]/15 text-[#EF4444] font-bold text-[10px]">Hapus</button>
+                    </div>
+                `).join('');
+            }
+
+            const csContactsEl = document.getElementById('admin-cs-contacts');
+            const csHeaderEl = document.getElementById('admin-cs-chat-header');
+            const csMessagesEl = document.getElementById('admin-cs-chat-messages');
+            const csReplyForm = document.getElementById('admin-cs-reply-form');
+            const csBadgeEl = document.getElementById('cs-unread-count-badge');
+
+            if (csContactsEl && csHeaderEl && csMessagesEl && csReplyForm) {
+                const totalUnread = csMessages.reduce((sum, item) => sum + (item.unread || 0), 0);
+                if (csBadgeEl) {
+                    csBadgeEl.textContent = totalUnread;
+                    csBadgeEl.style.display = totalUnread > 0 ? 'inline-block' : 'none';
+                }
+
+                if (!selectedCsUser || !csMessages.some(m => m.user === selectedCsUser)) {
+                    selectedCsUser = csMessages.length > 0 ? csMessages[0].user : null;
+                }
+
+                const sortedContacts = [...csMessages].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+                const statusStyles = {
+                    'Pending': 'bg-[#EF4444]/15 text-[#EF4444] border-[#EF4444]/30',
+                    'Berlangsung': 'bg-[#F59E0B]/15 text-[#F59E0B] border-[#F59E0B]/30',
+                    'Selesai': 'bg-[#22C55E]/15 text-[#22C55E] border-[#22C55E]/30',
+                };
+
+                csContactsEl.innerHTML = sortedContacts.map(item => {
+                    const isActive = selectedCsUser === item.user;
+                    const statusClass = statusStyles[item.status || 'Pending'];
+                    return `
+                        <button onclick="selectCsUser('${item.user}')" class="w-full p-3 text-left flex items-center gap-3 transition ${isActive ? 'bg-[#2E323B]/60' : 'hover:bg-[#1E2126]'}">
+                            <img src="${item.avatar}" class="w-10 h-10 rounded-full object-cover border border-[#2E323B]">
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center justify-between">
+                                    <h4 class="text-xs font-bold text-white truncate">${item.user}</h4>
+                                    <span class="text-[9px] text-neutral-500 font-mono">${formatTime(item.time)}</span>
+                                </div>
+                                <div class="flex items-center justify-between mt-1">
+                                    <p class="text-[10px] text-neutral-400 truncate pr-1">${item.message}</p>
+                                    <div class="flex items-center gap-1 shrink-0">
+                                        <span class="px-1.5 py-0.5 rounded border text-[9px] font-bold ${statusClass}">${item.status}</span>
+                                        <button onclick="togglePinCsUser(event, '${item.user}')" class="p-1">
+                                            <svg class="w-3 h-3 ${item.pinned ? 'text-[#F59E0B]' : 'text-neutral-500'}" fill="currentColor" viewBox="0 0 24 24"><path d="M16 9V4h1c.55 0 1-.45 1-1s-.45-1-1-1H7c-.55 0-1 .45-1 1s.45 1 1 1h1v5c0 1.66-1.34 3-3 3v2h5.97v7l1 1 1-1v-7H19v-2c-1.66 0-3-1.34-3-3z"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </button>
+                    `;
+                }).join('');
+
+                const activeUser = csMessages.find(m => m.user === selectedCsUser);
+                if (activeUser) {
+                    csHeaderEl.innerHTML = `
+                        <div class="flex items-center justify-between w-full">
+                            <div class="flex items-center gap-2">
+                                <img src="${activeUser.avatar}" class="w-8 h-8 rounded-full">
+                                <div>
+                                    <h4 class="text-xs font-bold text-white">${activeUser.user} ${activeUser.pinned ? '📌' : ''}</h4>
+                                    <span class="text-[10px] text-[#22C55E]">online</span>
+                                </div>
+                            </div>
+                            <select onchange="changeCsStatus('${activeUser.user}', this.value)" class="px-2 py-1 bg-[#141619] border border-[#2E323B] text-white text-xs font-bold rounded-lg focus:outline-none">
+                                <option value="Pending" ${activeUser.status === 'Pending' ? 'selected' : ''}>⏳ Pending</option>
+                                <option value="Berlangsung" ${activeUser.status === 'Berlangsung' ? 'selected' : ''}>💬 Berlangsung</option>
+                                <option value="Selesai" ${activeUser.status === 'Selesai' ? 'selected' : ''}>✅ Selesai</option>
+                            </select>
+                        </div>
+                    `;
+                    csReplyForm.classList.remove('hidden');
+
+                    csMessagesEl.innerHTML = `
+                        <div class="bg-[#202C33] border border-[#2E323B] text-neutral-200 px-3 py-2 rounded-xl text-xs max-w-[80%]">
+                            ${activeUser.message}
+                            <span class="block text-[9px] text-neutral-400 mt-1 text-right font-mono">${formatTime(activeUser.time)}</span>
+                        </div>
+                        ${activeUser.reply ? `
+                        <div class="bg-[#005C4B] text-white px-3 py-2 rounded-xl text-xs max-w-[80%] ml-auto">
+                            ${activeUser.reply}
+                            <span class="block text-[9px] text-emerald-200 mt-1 text-right font-mono">${formatTime(activeUser.time)}</span>
+                        </div>` : ''}
+                    `;
+                }
+            }
+
+            const csChatEl = document.getElementById('cs-chat-messages');
+            if (csChatEl) {
+                const userEmail = currentUser ? currentUser.email : 'siswa@smk.id';
+                const myMsg = csMessages.find(m => m.user === userEmail);
+                if (myMsg) {
+                    csChatEl.innerHTML = `
+                        <div class="bg-[#22C55E] text-[#141619] font-semibold p-2.5 rounded-xl text-xs max-w-[85%] ml-auto">
+                            ${myMsg.message}
+                            <span class="block text-[9px] opacity-75 mt-0.5 text-right font-mono">${formatTime(myMsg.time)}</span>
+                        </div>
+                        ${myMsg.reply ? `
+                        <div class="bg-[#1E2126] border border-[#2E323B] text-neutral-200 p-2.5 rounded-xl text-xs max-w-[85%] mt-2">
+                            <span class="block text-[10px] font-bold text-[#22C55E] mb-0.5">Smart Parking CS</span>
+                            ${myMsg.reply}
+                            <span class="block text-[9px] text-neutral-500 mt-0.5 text-right font-mono">${formatTime(myMsg.time)}</span>
+                        </div>` : `<p class="text-[10px] text-neutral-400 italic text-right mt-1">Menunggu balasan CS...</p>`}
+                    `;
+                } else {
+                    csChatEl.innerHTML = `<p class="text-xs text-neutral-400 text-center py-8">Ada kendala? Silakan chat Smart Parking CS di sini.</p>`;
+                }
+            }
+
+            const fbBadge = document.getElementById('admin-feedback-badge');
+            const boxBadge = document.getElementById('suggestion-badge-count');
+            if (fbBadge) fbBadge.textContent = feedbacks.length;
+            if (boxBadge) boxBadge.textContent = feedbacks.length;
+        }
+
+        setInterval(() => {
+            if (currentUser && (slots.some(s => s.occupied) || slots.some(s => s.reservedBy))) {
+                renderAll();
+            }
+        }, 1000);
+    </script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script>window.SMARTPARKING_CONFIG = { apiBase: '/api', mqttUrl: `ws://${location.hostname}:9001`, mqttUser: 'smartparking-dashboard', mqttPassword: 'GANTI_PASSWORD_DASHBOARD' };</script>
+<script src="integration.js"></script>
+</body>
+</html>
